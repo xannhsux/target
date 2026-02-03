@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D手势打靶游戏</title>
+    <title>3D Gesture Punching Game</title>
     <link rel="stylesheet" href="style.css">
 </head>
 
@@ -12,20 +12,20 @@
     <div id="container">
         <div id="ui">
             <div id="score-board">
-                <h2>得分</h2>
+                <h2>Score</h2>
                 <div id="score">0</div>
-                <div id="accuracy">击中率: 0%</div>
-                <div id="shots">出拳次数: 0</div>
+                <div id="accuracy">Accuracy: 0%</div>
+                <div id="shots">Punches: 0</div>
             </div>
             <div id="instructions">
-                <h3>拳击说明 (桌面版)</h3>
-                <p>👊 <strong>握紧拳头</strong>：五指并拢即可识别</p>
-                <p>🥊 <strong>小幅挥拳</strong>：坐在电脑前(10-40cm)向前轻挥即打中</p>
-                <p>🔊 <strong>打击音效</strong>：击中时发出“乓乓”声</p>
-                <p>按空格键开始/暂停游戏</p>
+                <h3>Boxing Guide (Desktop)</h3>
+                <p>👊 <strong>Clench Fist</strong>: Closen fingers to be recognized</p>
+                <p>🥊 <strong>Quick Punch</strong>: Move hand forward (10-40cm) to hit</p>
+                <p>🔊 <strong>Sound Effects</strong>: "Bang Bang" sound on hit</p>
+                <p>Press SPACE to Start/Pause</p>
             </div>
             <div id="status">
-                <div id="hand-status">等待检测手势...</div>
+                <div id="hand-status">Waiting for gesture...</div>
                 <div id="aim-status"></div>
             </div>
         </div>

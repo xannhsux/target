@@ -1,79 +1,62 @@
-# 3D手势打靶游戏 🎯
+# 3D Gesture Punching Game 🥊🎯
 
-一个使用手势控制的3D打靶游戏，让你在电脑前就能体验射击的乐趣！
+An immersive, gesture-controlled 3D boxing game built with **Three.js** and **MediaPipe Hands**. Box with a virtual punching bag using your bare hands!
 
-## 功能特点
+## 🌟 Key Features
 
-- 🎮 **手势控制**：使用MediaPipe识别手势，无需任何外设
-- 🎯 **3D场景**：使用Three.js创建沉浸式3D打靶场景
-- 📊 **计分系统**：实时显示得分、准确率和射击次数
-- 🎨 **精美UI**：现代化的界面设计，视觉效果出色
+- 🎮 **Dual-Hand Detection**: Tracks both left and right hands independently using high-performance AI.
+- 🥊 **Intuitive Gestures**: 
+  - **Clench Fist**: Close your fingers to "prepare" your punch.
+  - **Strike**: Move your hand forward quickly to hit the bag.
+- � **Guaranteed Hit System**: Simplified collision logic ensures every valid punch gesture registers as a satisfying hit.
+- 🎨 **Rich Visual Feedback**:
+  - Balanced Three.js 3D environment with lighting and fog.
+  - Dynamic "Bag Tilt" animation and red flash on impact.
+  - Color-coded hand tracking (Red for Left, Blue for Right).
+- 📊 **Real-time Stats**: Track your Score, Accuracy, and total Punch count.
+- 🔊 **Audio Experience**: Positional-style "Bang Bang" sound effects for every hit.
 
-## 使用方法
+## 🚀 How to Play
 
-1. **打开游戏**
-   - 直接在浏览器中打开 `index.html` 文件
-   - 或者使用本地服务器运行（推荐）
+1. **Launch the Game**
+   - Open `index.html` in a modern browser (Chrome/Edge recommended).
+   - Use a local server (e.g., `python -m http.server`) for the best experience.
 
-2. **允许摄像头权限**
-   - 浏览器会请求摄像头权限，请点击"允许"
-   - 确保摄像头正常工作
+2. **Grant Camera Permissions**
+   - Click "Allow" when prompted for camera access.
+   - Position yourself 0.5 - 1.5 meters from the webcam.
 
-3. **开始游戏**
-   - 按**空格键**开始游戏
-   - 伸出手掌，比出"枪"的手势（食指和拇指伸直，其他手指弯曲）
-   - 瞄准靶子，快速向上移动食指即可射击
+3. **Start Action**
+   - Press **SPACE** to Start or Pause the game.
+   - Show your fists to the camera.
+   - Strike forward!
 
-4. **计分规则**
-   - 中心（红色）：50分
-   - 内圈（黄色）：30分
-   - 中圈（蓝色）：20分
-   - 外圈（红色）：10分
+## 🛠️ Technical Stack
 
-## 手势说明
+- **Three.js**: Modern 3D rendering and physics visualization.
+- **MediaPipe Hands**: Google's high-fidelity hand and finger tracking.
+- **TensorFlow.js**: Running AI models directly in the browser.
+- **Vanilla JavaScript**: Core game logic and UI management.
 
-**"枪"的手势识别标准：**
-- ✅ 拇指伸直
-- ✅ 食指伸直
-- ✅ 中指、无名指、小指弯曲
+## 📋 Requirements
 
-**射击动作：**
-- 保持"枪"的手势
-- 快速向上移动食指即可触发射击
+- **Browser**: Latest version of Chrome, Edge, or Firefox.
+- **Hardware**: A standard webcam and a well-lit environment.
 
-## 技术栈
+## 💻 Development Setup
 
-- **Three.js** - 3D图形渲染
-- **MediaPipe Hands** - 手势识别
-- **原生JavaScript** - 游戏逻辑
-
-## 浏览器要求
-
-- Chrome/Edge（推荐）
-- Firefox
-- Safari（可能需要额外配置）
-
-## 注意事项
-
-- 确保有良好的光线条件，以便手势识别正常工作
-- 建议距离摄像头1-2米
-- 保持手势清晰可见
-
-## 开发说明
-
-如果需要本地开发服务器：
+To run locally with a development server:
 
 ```bash
-# 使用Python
-python -m http.server 8000
+# Using Python
+python3 -m http.server 8000
 
-# 或使用Node.js
+# Using Node.js
 npx http-server
 ```
 
-然后在浏览器中访问 `http://localhost:8000`
+Then visit `http://localhost:8000` in your browser.
 
 ---
 
-享受游戏，释放压力！🎮
-
+Enjoy the workout and release some stress! 🥊🔥

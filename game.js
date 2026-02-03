@@ -1,7 +1,7 @@
-// 游戏状态
+// Game State
 let gameState = {
     score: 0,
-    shots: 0, // 记录打击尝试
+    shots: 0, // Hit attempts
     hits: 0,
     isPlaying: false,
     handDetected: false,
@@ -9,10 +9,10 @@ let gameState = {
     isPunching: false
 };
 
-// Three.js 场景设置
+// Three.js Scene Setup
 let scene, camera, renderer;
-let punchingBag; // 替换 targets 数组
-let bullets = []; // 保留以便旧代码不报错，但不再使用
+let punchingBag; // Replacing targets array
+let bullets = []; // Keep for compat, no longer used
 let aimingLine;
 let audioCtx;
 
@@ -22,15 +22,15 @@ let debugCanvas;
 let debugCtx;
 let animationFrameId;
 
-// 手势状态
+// Gesture State
 let handStates = {
     'Left': { lastSize: null, lastPunchTime: 0 },
     'Right': { lastSize: null, lastPunchTime: 0 }
-}; // 使用左右手标签独立跟踪，避免索引交换导致的跳变
+}; // Stable tracking using Left/Right labels to avoid index swapping
 let punchSizeThreshold = 0.04;
 let lastPunchTime = 0;
 
-// 初始化
+// Initialization
 async function init() {
     setupThreeJS();
     setupDebugCanvas();
@@ -40,13 +40,13 @@ async function init() {
     animate();
 }
 
-// 设置Three.js场景
+// Setup Three.js Scene
 function setupThreeJS() {
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x1a1a2e);
     scene.fog = new THREE.Fog(0x1a1a2e, 10, 50);
 
-    // 相机
+    // Camera
     camera = new THREE.PerspectiveCamera(
         75,
         window.innerWidth / window.innerHeight,
@@ -55,7 +55,7 @@ function setupThreeJS() {
     );
     camera.position.set(0, 1.6, 5);
 
-    // 渲染器
+    // Renderer
     renderer = new THREE.WebGLRenderer({
         canvas: document.getElementById('game-canvas'),
         antialias: true
@@ -63,7 +63,7 @@ function setupThreeJS() {
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
 
-    // 灯光
+    // Lights
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambientLight);
 
@@ -72,7 +72,7 @@ function setupThreeJS() {
     directionalLight.castShadow = true;
     scene.add(directionalLight);
 
-    // 创建地面
+    // Create Floor
     const groundGeometry = new THREE.PlaneGeometry(50, 50);
     const groundMaterial = new THREE.MeshStandardMaterial({
         color: 0x2d2d44,
@@ -84,12 +84,12 @@ function setupThreeJS() {
     ground.receiveShadow = true;
     scene.add(ground);
 
-    // 创建瞄准辅助线（虚线）- 黄色更显眼
+    // Create Aiming Guide Line (Dashed) - Yellow is more visible
     const lineMaterial = new THREE.LineDashedMaterial({
-        color: 0xffff00,  // 改为黄色
+        color: 0xffff00,
         linewidth: 3,
         scale: 1,
-        dashSize: 0.8,    // 增大虚线段
+        dashSize: 0.8,
         gapSize: 0.4
     });
 
@@ -100,18 +100,18 @@ function setupThreeJS() {
 
     aimingLine = new THREE.Line(lineGeometry, lineMaterial);
     aimingLine.computeLineDistances();
-    aimingLine.visible = false; // 默认隐藏
+    aimingLine.visible = false; // Hidden by default
     scene.add(aimingLine);
 
-    // 创建准星
+    // Create Crosshair
     createCrosshair();
 }
 
-// 创建准星
+// Create Crosshair
 function createCrosshair() {
     const crosshairGroup = new THREE.Group();
 
-    // 水平线
+    // Horizontal line
     const hGeometry = new THREE.BufferGeometry().setFromPoints([
         new THREE.Vector3(-0.1, 0, -0.5),
         new THREE.Vector3(0.1, 0, -0.5)
@@ -119,7 +119,7 @@ function createCrosshair() {
     const hLine = new THREE.Line(hGeometry, new THREE.LineBasicMaterial({ color: 0x00ff00 }));
     crosshairGroup.add(hLine);
 
-    // 垂直线
+    // Vertical line
     const vGeometry = new THREE.BufferGeometry().setFromPoints([
         new THREE.Vector3(0, -0.1, -0.5),
         new THREE.Vector3(0, 0.1, -0.5)
@@ -127,7 +127,7 @@ function createCrosshair() {
     const vLine = new THREE.Line(vGeometry, new THREE.LineBasicMaterial({ color: 0x00ff00 }));
     crosshairGroup.add(vLine);
 
-    // 中心点
+    // Center point
     const dotGeometry = new THREE.CircleGeometry(0.01, 8);
     const dotMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
     const dot = new THREE.Mesh(dotGeometry, dotMaterial);
@@ -138,11 +138,11 @@ function createCrosshair() {
     crosshair = crosshairGroup;
 }
 
-// 创建沙包
+// Create Punching Bag
 function createTargets() {
     const bagGroup = new THREE.Group();
 
-    // 沙包主体
+    // Main Bag
     const bagGeometry = new THREE.CylinderGeometry(0.8, 0.8, 3, 32);
     const bagMaterial = new THREE.MeshStandardMaterial({
         color: 0x8b0000,
@@ -150,32 +150,32 @@ function createTargets() {
         metalness: 0.2
     });
     const bagMesh = new THREE.Mesh(bagGeometry, bagMaterial);
-    bagMesh.position.y = -1.5; // 挂点在顶部
+    bagMesh.position.y = -1.5; // Pivot at top
     bagGroup.add(bagMesh);
 
-    // 挂绳
+    // Rope
     const ropeGeometry = new THREE.CylinderGeometry(0.05, 0.05, 2, 8);
     const ropeMaterial = new THREE.MeshStandardMaterial({ color: 0x000000 });
     const rope = new THREE.Mesh(ropeGeometry, ropeMaterial);
     rope.position.y = 1;
     bagGroup.add(rope);
 
-    bagGroup.position.set(0, 4, -5); // 悬挂在前方
+    bagGroup.position.set(0, 4, -5); // Hanging in front
     scene.add(bagGroup);
     punchingBag = bagGroup;
 
-    // 为了兼容旧的检测代码，我们将 bagMesh 放入 targets
+    // Compatibility with old detection code
     targets = [bagMesh];
 }
 
-// 初始化音效
+// Initialize Audio
 function initAudio() {
     if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     }
 }
 
-// 播放打击声 "乓"
+// Play hit sound
 function playPunchSound() {
     if (!audioCtx) initAudio();
     if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -196,7 +196,7 @@ function playPunchSound() {
     osc.start();
     osc.stop(audioCtx.currentTime + 0.2);
 
-    // 第二个高频音模拟碰撞
+    // Secondary high-freq sound for impact
     const osc2 = audioCtx.createOscillator();
     const gain2 = audioCtx.createGain();
     osc2.type = 'sine';
@@ -209,9 +209,7 @@ function playPunchSound() {
     osc2.stop(audioCtx.currentTime + 0.05);
 }
 
-
-
-// 设置调试画布
+// Setup Debug Canvas
 function setupDebugCanvas() {
     debugCanvas = document.getElementById('debug-canvas');
     if (debugCanvas) {
@@ -228,11 +226,11 @@ function setupDebugCanvas() {
     }
 }
 
-// 设置手势检测 - 使用TensorFlow.js HandPose
+// Setup Hand Detection - Using TensorFlow.js HandPose
 async function setupHandDetection() {
     const videoElement = document.getElementById('video');
 
-    // 获取摄像头流
+    // Get camera stream
     try {
         const stream = await navigator.mediaDevices.getUserMedia({
             video: {
@@ -243,7 +241,7 @@ async function setupHandDetection() {
         });
         videoElement.srcObject = stream;
 
-        // 等待视频加载完成
+        // Wait for video to load
         await new Promise((resolve) => {
             videoElement.onloadedmetadata = () => {
                 videoElement.play();
@@ -251,14 +249,14 @@ async function setupHandDetection() {
             };
         });
 
-        updateHandStatus('摄像头已启动，正在加载模型...');
+        updateHandStatus('Camera started, loading model...');
     } catch (err) {
-        console.error('无法访问摄像头:', err);
-        updateHandStatus('无法访问摄像头，请检查权限');
+        console.error('Failed to access camera:', err);
+        updateHandStatus('Camera access failed, please check permissions');
         return;
     }
 
-    // 等待TensorFlow.js库加载完成
+    // Wait for TF.js libraries
     let retries = 0;
     const maxRetries = 100;
 
@@ -268,36 +266,36 @@ async function setupHandDetection() {
     }
 
     if (typeof handPoseDetection === 'undefined') {
-        console.error('TensorFlow.js HandPose库未加载');
-        updateHandStatus('HandPose库加载失败，请检查网络连接');
+        console.error('TF.js HandPose library not loaded');
+        updateHandStatus('HandPose library failed to load, check network');
         return;
     }
 
-    // 使用TensorFlow.js HandPose (MediaPipe Runtime)
+    // Use TF.js HandPose (MediaPipe Runtime)
     try {
-        updateHandStatus('正在初始化模型(MediaPipe)...');
+        updateHandStatus('Initializing model (MediaPipe)...');
 
         const model = handPoseDetection.SupportedModels.MediaPipeHands;
         const detectorConfig = {
-            runtime: 'mediapipe', // 切换到 mediapipe 运行时
-            maxHands: 2, // 启用双拳
+            runtime: 'mediapipe',
+            maxHands: 2,
             modelType: 'full',
-            solutionPath: `https://cdn.jsdelivr.net/npm/@mediapipe/hands` // 指定解决方案路径
+            solutionPath: `https://cdn.jsdelivr.net/npm/@mediapipe/hands`
         };
 
         detector = await handPoseDetection.createDetector(model, detectorConfig);
-        console.log('HandPose模型(MediaPipe)已加载');
-        updateHandStatus('✅ 模型已加载，等待检测近处手势...');
+        console.log('HandPose Model (MediaPipe) loaded');
+        updateHandStatus('✅ Model loaded, waiting for gestures...');
 
-        // 开始检测循环
+        // Start detection loop
         detectHands();
     } catch (err) {
-        console.error('HandPose(MediaPipe)初始化错误:', err);
-        updateHandStatus('模型加载失败: ' + err.message);
+        console.error('HandPose (MediaPipe) init error:', err);
+        updateHandStatus('Model failed to load: ' + err.message);
     }
 }
 
-// 持续检测手势
+// Continuous Hand Detection
 async function detectHands() {
     const videoElement = document.getElementById('video');
 
@@ -307,7 +305,7 @@ async function detectHands() {
                 const hands = await detector.estimateHands(videoElement);
                 processHandResults(hands);
             } catch (err) {
-                console.error('手势检测错误:', err);
+                console.error('Hand detection error:', err);
             }
         }
 
@@ -317,11 +315,11 @@ async function detectHands() {
     detect();
 }
 
-// 处理手势检测结果 - 将TensorFlow格式转换为类似MediaPipe的格式
+// Process detection results - map TF format to MediaPipe-like format
 function processHandResults(hands) {
     const video = document.getElementById('video');
 
-    // 绘制调试信息
+    // Draw video to debug canvas
     if (debugCtx) {
         debugCtx.save();
         debugCtx.scale(-1, 1);
@@ -335,27 +333,27 @@ function processHandResults(hands) {
         let totalHands = hands.length;
         let fistsReady = 0;
 
-        // 处理每一只手
+        // Process each hand
         hands.forEach((hand) => {
             const handScore = hand.score || 0;
             if (handScore < 0.6) return;
 
-            // 获取手性 (Left/Right)
+            // Get handedness (Left/Right)
             const label = hand.handedness && hand.handedness[0] ? hand.handedness[0].label : 'Right';
 
-            // 转换坐标
+            // Convert coordinates
             const landmarks = hand.keypoints.map(kp => ({
                 x: kp.x / video.videoWidth,
                 y: kp.y / video.videoHeight,
                 z: kp.z || 0
             }));
 
-            // 绘制调试信息
+            // Draw landmarks for debugging
             if (debugCtx) {
                 debugCtx.save();
                 debugCtx.scale(-1, 1);
                 debugCtx.translate(-debugCanvas.width, 0);
-                // 使用更鲜艳的红色和蓝色区分左右手
+                // Use distinct colors for Left/Right hands
                 debugCtx.strokeStyle = label === 'Left' ? '#FF3B30' : '#007AFF';
                 debugCtx.fillStyle = label === 'Left' ? '#FF3B30' : '#007AFF';
                 debugCtx.lineWidth = 2;
@@ -369,9 +367,9 @@ function processHandResults(hands) {
                 debugCtx.restore();
             }
 
-            // 拳击逻辑
+            // Punching logic
             if (gameState.isPlaying) {
-                // 如果是右手（或第一只手），控制相机视野
+                // If Right hand (or only one hand), control camera rotation
                 if (label === 'Right' || totalHands === 1) {
                     const wrist = landmarks[0];
                     const targetRotationY = (0.5 - wrist.x) * Math.PI / 3;
@@ -387,43 +385,43 @@ function processHandResults(hands) {
             }
         });
 
-        // 更新状态文字
+        // Update status text
         if (fistsReady > 0) {
-            updateHandStatus(`✊ ${fistsReady}只拳头已就绪！出拳！`);
+            updateHandStatus(`✊ ${fistsReady} Fist(s) Ready! PUNCH!`);
         } else {
-            updateHandStatus('✋ 请握紧拳头...');
+            updateHandStatus('✋ Clench your fist...');
         }
     } else {
         gameState.handDetected = false;
         gameState.isAiming = false;
-        updateHandStatus('等待检测手势...');
+        updateHandStatus('Waiting for gesture...');
         if (debugCtx) debugCtx.clearRect(0, 0, debugCanvas.width, debugCanvas.height);
     }
 }
 
-// 检查是否是拳头
+// Check if a hand is clenched in a fist
 function checkIsFist(landmarks) {
     if (!landmarks || landmarks.length < 21) return false;
 
-    // 计算关键点到手腕的距离，如果指尖跟手腕很近，说明握拳了
+    // Calculate distance from fingertips to wrist
     const distance = (p1, p2) => Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
     const wrist = landmarks[0];
-    const fingerTips = [8, 12, 16, 20]; // 食指、中指、无名指、小指尖
-    const knuckles = [5, 9, 13, 17]; // 指根 MCP 节点
+    const fingerTips = [8, 12, 16, 20]; // Index, Middle, Ring, Pinky tips
+    const knuckles = [5, 9, 13, 17]; // MCP nodes
 
     let collapsedCount = 0;
     for (let i = 0; i < fingerTips.length; i++) {
         const tipDist = distance(wrist, landmarks[fingerTips[i]]);
         const knuckleDist = distance(wrist, landmarks[knuckles[i]]);
 
-        // 如果指尖距离手腕比指根距离手腕更近，或者非常接近，说明手指弯曲了
+        // If tip is closer to wrist than knuckle, the finger is curled
         if (tipDist < knuckleDist * 1.3) collapsedCount++;
     }
 
     return collapsedCount >= 3;
 }
 
-// 检测挥拳动作 (核心优化：使用手部尺寸变化代替 Z 轴)
+// Detect Punch Gesture (based on size surge)
 function detectPunchAction(landmarks, handLabel = 'Right') {
     const wrist = landmarks[0];
     const indexMCP = landmarks[5];
@@ -434,7 +432,7 @@ function detectPunchAction(landmarks, handLabel = 'Right') {
         const deltaSize = currentSize - state.lastSize;
         const now = Date.now();
 
-        // 阈值提高到 0.04，确保需要明显的“冲拳”动作才触发
+        // Use 0.04 threshold to require deliberate forward movement
         if (deltaSize > 0.04 && now - state.lastPunchTime > 500) {
             handlePunch();
             state.lastPunchTime = now;
@@ -443,13 +441,13 @@ function detectPunchAction(landmarks, handLabel = 'Right') {
     if (state) state.lastSize = currentSize;
 }
 
-// 处理挥拳 (必中逻辑)
+// Handle Punch (Guaranteed Hit logic)
 function handlePunch() {
     gameState.shots++;
     updateScore();
-    updateAimStatus('🥊 挥拳攻击！', 'shooting');
+    updateAimStatus('🥊 ATTACK!', 'shooting');
 
-    // 必中逻辑：只要检测到挥拳，就直接触发击中效果
+    // Trigger hit effect immediately upon punch detection
     onBagHit();
 
     setTimeout(() => {
@@ -457,18 +455,18 @@ function handlePunch() {
     }, 300);
 }
 
-// 沙包被击中
+// Handle Bag Hit
 function onBagHit() {
     gameState.score += 50;
     gameState.hits++;
     updateScore();
     playPunchSound();
 
-    // 沙包动画：扭动
-    punchingBag.rotation.x = -Math.PI / 8; // 向后倒
+    // Bag animation: Tilt back
+    punchingBag.rotation.x = -Math.PI / 8;
     punchingBag.userData.velocity = 0.2;
 
-    // 反馈颜色
+    // Visual feedback: Flash red
     const bagMesh = punchingBag.children[0];
     bagMesh.material.emissive.setHex(0xff0000);
     bagMesh.material.emissiveIntensity = 0.8;
@@ -478,90 +476,11 @@ function onBagHit() {
     }, 200);
 }
 
-// (已弃用)
+// (Legacy/Deprecated functions)
 function handleAiming() { }
 function shoot() { }
 
-// 检查是否击中靶子（修复版：球体碰撞，支持简化球体和复杂模型）
-function checkHit(bullet) {
-    // 修复4: 使用球体碰撞检测，更适合简化版红球目标
-    for (let i = 0; i < targets.length; i++) {
-        const target = targets[i];
-
-        // 跳过已经击中的目标
-        if (target.userData.isHit) continue;
-
-        // 计算子弹和目标之间的距离
-        const distance = bullet.position.distanceTo(target.position);
-
-        // 如果距离小于目标半径（1.5），则击中
-        if (distance < 1.5) {
-            // 击中！计算得分（根据距离）
-            let points = 0;
-            if (distance < 0.5) {
-                points = 100; // 正中心
-            } else if (distance < 0.8) {
-                points = 75;
-            } else if (distance < 1.2) {
-                points = 50;
-            } else {
-                points = 25;
-            }
-
-            gameState.score += points;
-            gameState.hits++;
-            target.userData.isHit = true;
-
-            // 变绿色表示击中（支持简化版和复杂版）
-            if (target.material) {
-                // 简化版：直接修改target.material
-                target.material.emissive = new THREE.Color(0x00ff00);
-                target.material.emissiveIntensity = 0.8;
-            }
-
-            if (target.children && target.children.length > 0) {
-                // 复杂版：修改children的material
-                target.children.forEach(child => {
-                    if (child.material) {
-                        child.material.emissive = new THREE.Color(0x00ff00);
-                        child.material.emissiveIntensity = 0.8;
-                    }
-                });
-            }
-
-            // 1秒后变回红色并重置
-            setTimeout(() => {
-                if (target.material) {
-                    target.material.emissive = new THREE.Color(0xff0000);
-                    target.material.emissiveIntensity = 0.3;
-                }
-                if (target.children && target.children.length > 0) {
-                    target.children.forEach(child => {
-                        if (child.material) {
-                            child.material.emissive = new THREE.Color(0xff0000);
-                            child.material.emissiveIntensity = 0.3;
-                        }
-                    });
-                }
-                target.userData.isHit = false;
-            }, 1000);
-
-            updateScore();
-
-            // 移除子弹
-            const bulletIndex = bullets.indexOf(bullet);
-            if (bulletIndex > -1) {
-                scene.remove(bullet);
-                bullets.splice(bulletIndex, 1);
-            }
-
-            // 已找到击中，退出循环
-            return;
-        }
-    }
-}
-
-// 更新分数显示
+// Update Score Display
 function updateScore() {
     const scoreValEl = document.getElementById('score');
     if (scoreValEl) scoreValEl.textContent = gameState.score;
@@ -570,13 +489,13 @@ function updateScore() {
     const accuracy = gameState.shots > 0
         ? Math.round((gameState.hits / gameState.shots) * 100)
         : 0;
-    if (accuracyEl) accuracyEl.textContent = `击中率: ${accuracy}%`;
+    if (accuracyEl) accuracyEl.textContent = `Accuracy: ${accuracy}%`;
 
     const shotsEl = document.getElementById('shots');
-    if (shotsEl) shotsEl.textContent = `出拳次数: ${gameState.shots}`;
+    if (shotsEl) shotsEl.textContent = `Punches: ${gameState.shots}`;
 }
 
-// 更新手势状态显示
+// Update Hand Gesture Status
 function updateHandStatus(text) {
     const statusEl = document.getElementById('hand-status');
     if (statusEl) {
@@ -585,23 +504,23 @@ function updateHandStatus(text) {
     }
 }
 
-// 更新瞄准状态显示
+// Update Aim/Attack Message
 function updateAimStatus(text, className = '') {
     const statusEl = document.getElementById('aim-status');
     statusEl.textContent = text;
     statusEl.className = className;
 }
 
-// 设置事件监听
+// Setup Event Listeners
 function setupEventListeners() {
-    // 空格键射击（如果游戏进行中）或开始游戏
+    // Space to start/pause or manual punch
     document.addEventListener('keydown', (e) => {
         if (e.code === 'Space') {
             e.preventDefault();
-            initAudio(); // 用户交互后启动音频上下文
+            initAudio(); // Start audio context on user interaction
 
-            // 如果游戏正在进行则手动模拟出拳（用于测试）
             if (gameState.isPlaying) {
+                // Manual punch simulation for testing
                 handlePunch();
             } else {
                 toggleGame();
@@ -609,7 +528,7 @@ function setupEventListeners() {
         }
     });
 
-    // 窗口大小调整
+    // Window Resize
     window.addEventListener('resize', () => {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
@@ -617,33 +536,32 @@ function setupEventListeners() {
     });
 }
 
-// 切换游戏状态
+// Toggle Game Play State
 function toggleGame() {
     gameState.isPlaying = !gameState.isPlaying;
 
     if (gameState.isPlaying) {
         if (gameState.handDetected) {
-            updateHandStatus('游戏进行中...');
+            updateHandStatus('Game Active...');
         } else {
-            updateHandStatus('游戏进行中...（等待检测手势）');
+            updateHandStatus('Game Active... (Waiting for hands)');
         }
-        // 重置所有靶子
+        // Reset targets compatibility
         targets.forEach(target => {
             target.userData.isHit = false;
         });
     } else {
-        updateHandStatus('游戏已暂停');
-        updateAimStatus('按空格键继续');
+        updateHandStatus('Game Paused');
+        updateAimStatus('Press SPACE to Resume');
     }
 }
 
-// 动画循环
+// Animation Loop
 function animate() {
     requestAnimationFrame(animate);
 
-    // 沙包物理模拟：简单的摆动恢复
+    // Bag physical simulation: Simple sway recovery
     if (punchingBag) {
-        // 恢复原状的力
         punchingBag.rotation.x *= 0.95;
         punchingBag.rotation.z *= 0.95;
     }
@@ -651,5 +569,5 @@ function animate() {
     renderer.render(scene, camera);
 }
 
-// 启动游戏
+// Initialize the game
 init();
