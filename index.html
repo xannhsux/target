@@ -14,14 +14,14 @@
             <div id="score-board">
                 <h2>得分</h2>
                 <div id="score">0</div>
-                <div id="accuracy">准确率: 0%</div>
-                <div id="shots">射击次数: 0</div>
+                <div id="accuracy">击中率: 0%</div>
+                <div id="shots">出拳次数: 0</div>
             </div>
             <div id="instructions">
-                <h3>操作说明</h3>
-                <p>🤚 伸出手掌，然后比出"枪"的手势（食指和拇指伸直）</p>
-                <p>🎯 瞄准靶子，保持手势稳定</p>
-                <p>👆 快速向上移动食指即可射击</p>
+                <h3>拳击说明 (桌面版)</h3>
+                <p>👊 <strong>握紧拳头</strong>：五指并拢即可识别</p>
+                <p>🥊 <strong>小幅挥拳</strong>：坐在电脑前(10-40cm)向前轻挥即打中</p>
+                <p>🔊 <strong>打击音效</strong>：击中时发出“乓乓”声</p>
                 <p>按空格键开始/暂停游戏</p>
             </div>
             <div id="status">
@@ -34,6 +34,7 @@
         <canvas id="debug-canvas"></canvas>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl"></script>

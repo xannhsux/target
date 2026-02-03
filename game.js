@@ -1,19 +1,20 @@
 // 游戏状态
 let gameState = {
     score: 0,
-    shots: 0,
+    shots: 0, // 记录打击尝试
     hits: 0,
     isPlaying: false,
     handDetected: false,
-    isAiming: false
+    isAiming: false,
+    isPunching: false
 };
 
 // Three.js 场景设置
 let scene, camera, renderer;
-let targets = [];
-let bullets = [];
-let crosshair;
-let aimingLine; // 瞄准辅助线
+let punchingBag; // 替换 targets 数组
+let bullets = []; // 保留以便旧代码不报错，但不再使用
+let aimingLine;
+let audioCtx;
 
 // Hand Detection
 let detector;
@@ -22,9 +23,12 @@ let debugCtx;
 let animationFrameId;
 
 // 手势状态
-let handLandmarks = null;
-let lastIndexFingerY = null;
-let shootingThreshold = 0.05; // 射击阈值
+let handStates = {
+    'Left': { lastSize: null, lastPunchTime: 0 },
+    'Right': { lastSize: null, lastPunchTime: 0 }
+}; // 使用左右手标签独立跟踪，避免索引交换导致的跳变
+let punchSizeThreshold = 0.04;
+let lastPunchTime = 0;
 
 // 初始化
 async function init() {
@@ -134,29 +138,75 @@ function createCrosshair() {
     crosshair = crosshairGroup;
 }
 
-// 创建靶子（单个大球）
+// 创建沙包
 function createTargets() {
-    // 创建一个大的发光球体作为目标
-    const ballGeometry = new THREE.SphereGeometry(1.5, 32, 32);
-    const ballMaterial = new THREE.MeshStandardMaterial({
-        color: 0xff6b6b,
-        emissive: 0xff0000,
-        emissiveIntensity: 0.3,
-        metalness: 0.3,
-        roughness: 0.7
+    const bagGroup = new THREE.Group();
+
+    // 沙包主体
+    const bagGeometry = new THREE.CylinderGeometry(0.8, 0.8, 3, 32);
+    const bagMaterial = new THREE.MeshStandardMaterial({
+        color: 0x8b0000,
+        roughness: 0.5,
+        metalness: 0.2
     });
+    const bagMesh = new THREE.Mesh(bagGeometry, bagMaterial);
+    bagMesh.position.y = -1.5; // 挂点在顶部
+    bagGroup.add(bagMesh);
 
-    const ball = new THREE.Mesh(ballGeometry, ballMaterial);
-    ball.position.set(0, 2, -10); // 放在前方10单位，高度2
-    ball.castShadow = true;
-    ball.userData = {
-        isHit: false,
-        hitTime: 0
-    };
-    scene.add(ball);
-    targets.push(ball);
+    // 挂绳
+    const ropeGeometry = new THREE.CylinderGeometry(0.05, 0.05, 2, 8);
+    const ropeMaterial = new THREE.MeshStandardMaterial({ color: 0x000000 });
+    const rope = new THREE.Mesh(ropeGeometry, ropeMaterial);
+    rope.position.y = 1;
+    bagGroup.add(rope);
 
-    console.log('目标球已创建:', ball.position);
+    bagGroup.position.set(0, 4, -5); // 悬挂在前方
+    scene.add(bagGroup);
+    punchingBag = bagGroup;
+
+    // 为了兼容旧的检测代码，我们将 bagMesh 放入 targets
+    targets = [bagMesh];
+}
+
+// 初始化音效
+function initAudio() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+}
+
+// 播放打击声 "乓"
+function playPunchSound() {
+    if (!audioCtx) initAudio();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.1);
+
+    gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.2);
+
+    // 第二个高频音模拟碰撞
+    const osc2 = audioCtx.createOscillator();
+    const gain2 = audioCtx.createGain();
+    osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(800, audioCtx.currentTime);
+    gain2.gain.setValueAtTime(0.2, audioCtx.currentTime);
+    gain2.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.05);
+    osc2.connect(gain2);
+    gain2.connect(audioCtx.destination);
+    osc2.start();
+    osc2.stop(audioCtx.currentTime + 0.05);
 }
 
 
@@ -223,27 +273,27 @@ async function setupHandDetection() {
         return;
     }
 
-    // 使用TensorFlow.js HandPose
+    // 使用TensorFlow.js HandPose (MediaPipe Runtime)
     try {
-        updateHandStatus('正在初始化模型...');
+        updateHandStatus('正在初始化模型(MediaPipe)...');
 
         const model = handPoseDetection.SupportedModels.MediaPipeHands;
         const detectorConfig = {
-            runtime: 'tfjs',
-            maxHands: 1,
-            modelType: 'full'
+            runtime: 'mediapipe', // 切换到 mediapipe 运行时
+            maxHands: 2, // 启用双拳
+            modelType: 'full',
+            solutionPath: `https://cdn.jsdelivr.net/npm/@mediapipe/hands` // 指定解决方案路径
         };
 
         detector = await handPoseDetection.createDetector(model, detectorConfig);
-        console.log('HandPose模型已加载');
-        updateHandStatus('✅ 模型已加载，等待检测手势...');
+        console.log('HandPose模型(MediaPipe)已加载');
+        updateHandStatus('✅ 模型已加载，等待检测近处手势...');
 
         // 开始检测循环
         detectHands();
     } catch (err) {
-        console.error('HandPose初始化错误:', err);
+        console.error('HandPose(MediaPipe)初始化错误:', err);
         updateHandStatus('模型加载失败: ' + err.message);
-        console.error('详细错误:', err);
     }
 }
 
@@ -280,232 +330,157 @@ function processHandResults(hands) {
         debugCtx.restore();
     }
 
-    // 关键修复：添加置信度检查和视频尺寸验证
     if (hands && hands.length > 0) {
-        const hand = hands[0];
-
-        // 修复1: 检查hand是否有足够的置信度（score），避免误检测
-        const handScore = hand.score || 0;
-        if (handScore < 0.7) {
-            // 置信度不够，不处理
-            handLandmarks = null;
-            gameState.handDetected = false;
-            updateHandStatus('等待检测手势...');
-            return;
-        }
-
-        // 修复2: 检查video尺寸是否有效，避免除以0导致NaN
-        if (!video.videoWidth || !video.videoHeight) {
-            console.warn('Video dimensions not ready:', video.videoWidth, video.videoHeight);
-            return;
-        }
-
-        // 转换TensorFlow格式到归一化坐标 (0-1范围，与MediaPipe格式一致)
-        handLandmarks = hand.keypoints.map(kp => ({
-            x: kp.x / video.videoWidth,
-            y: kp.y / video.videoHeight,
-            z: kp.z || 0
-        }));
-
         gameState.handDetected = true;
-        updateHandStatus('✅ 手势已检测 (置信度: ' + Math.round(handScore * 100) + '%' + ')');
+        let totalHands = hands.length;
+        let fistsReady = 0;
 
-        // 绘制手部关键点
-        if (debugCtx && handLandmarks) {
-            debugCtx.save();
-            debugCtx.scale(-1, 1);
-            debugCtx.translate(-debugCanvas.width, 0);
-            debugCtx.strokeStyle = '#00FF00';
-            debugCtx.fillStyle = '#00FF00';
-            debugCtx.lineWidth = 2;
+        // 处理每一只手
+        hands.forEach((hand) => {
+            const handScore = hand.score || 0;
+            if (handScore < 0.6) return;
 
-            handLandmarks.forEach((landmark) => {
-                const x = landmark.x * debugCanvas.width;
-                const y = landmark.y * debugCanvas.height;
-                debugCtx.beginPath();
-                debugCtx.arc(x, y, 3, 0, 2 * Math.PI);
-                debugCtx.fill();
-            });
+            // 获取手性 (Left/Right)
+            const label = hand.handedness && hand.handedness[0] ? hand.handedness[0].label : 'Right';
 
-            debugCtx.restore();
-        }
+            // 转换坐标
+            const landmarks = hand.keypoints.map(kp => ({
+                x: kp.x / video.videoWidth,
+                y: kp.y / video.videoHeight,
+                z: kp.z || 0
+            }));
 
-        // 简化版：用手的位置直接控制相机
-        gameState.isAiming = true;
-        const indexTip = handLandmarks[8]; // 食指尖端
-
-        if (indexTip && gameState.isPlaying) {
-            // 将手部位置映射到相机旋转
-            const targetRotationY = (0.5 - indexTip.x) * Math.PI / 2; // 左右 ±45度
-            const targetRotationX = (indexTip.y - 0.5) * Math.PI / 3; // 上下 ±30度
-
-            // 修复3: 添加NaN检查，防止无效值破坏相机矩阵
-            if (!isNaN(targetRotationY) && !isNaN(targetRotationX) &&
-                isFinite(targetRotationY) && isFinite(targetRotationX)) {
-                // 平滑过渡
-                camera.rotation.y += (targetRotationY - camera.rotation.y) * 0.1;
-                camera.rotation.x += (targetRotationX - camera.rotation.x) * 0.1;
+            // 绘制调试信息
+            if (debugCtx) {
+                debugCtx.save();
+                debugCtx.scale(-1, 1);
+                debugCtx.translate(-debugCanvas.width, 0);
+                // 使用更鲜艳的红色和蓝色区分左右手
+                debugCtx.strokeStyle = label === 'Left' ? '#FF3B30' : '#007AFF';
+                debugCtx.fillStyle = label === 'Left' ? '#FF3B30' : '#007AFF';
+                debugCtx.lineWidth = 2;
+                landmarks.forEach((landmark) => {
+                    const x = landmark.x * debugCanvas.width;
+                    const y = landmark.y * debugCanvas.height;
+                    debugCtx.beginPath();
+                    debugCtx.arc(x, y, 3, 0, 2 * Math.PI);
+                    debugCtx.fill();
+                });
+                debugCtx.restore();
             }
 
-            // 显示瞄准线
-            if (aimingLine) {
-                aimingLine.visible = true;
-                aimingLine.position.copy(camera.position);
-                aimingLine.quaternion.copy(camera.quaternion);
-            }
+            // 拳击逻辑
+            if (gameState.isPlaying) {
+                // 如果是右手（或第一只手），控制相机视野
+                if (label === 'Right' || totalHands === 1) {
+                    const wrist = landmarks[0];
+                    const targetRotationY = (0.5 - wrist.x) * Math.PI / 3;
+                    const targetRotationX = (wrist.y - 0.5) * Math.PI / 4;
+                    if (!isNaN(targetRotationY) && !isNaN(targetRotationX)) {
+                        camera.rotation.y += (targetRotationY - camera.rotation.y) * 0.1;
+                        camera.rotation.x += (targetRotationX - camera.rotation.x) * 0.1;
+                    }
+                }
 
-            updateAimStatus('🎯 瞄准中... (空格键射击)', 'aiming');
+                if (checkIsFist(landmarks)) fistsReady++;
+                detectPunchAction(landmarks, label);
+            }
+        });
+
+        // 更新状态文字
+        if (fistsReady > 0) {
+            updateHandStatus(`✊ ${fistsReady}只拳头已就绪！出拳！`);
+        } else {
+            updateHandStatus('✋ 请握紧拳头...');
         }
     } else {
-        handLandmarks = null;
         gameState.handDetected = false;
         gameState.isAiming = false;
         updateHandStatus('等待检测手势...');
-        updateAimStatus('');
-
-        // 隐藏瞄准线
-        if (aimingLine) aimingLine.visible = false;
-
-        // 清除调试画布
-        if (debugCtx) {
-            debugCtx.clearRect(0, 0, debugCanvas.width, debugCanvas.height);
-        }
+        if (debugCtx) debugCtx.clearRect(0, 0, debugCanvas.width, debugCanvas.height);
     }
 }
 
-// 检测是否是"枪"的手势（食指和拇指伸直，其他手指弯曲）
-function isGunGesture(landmarks) {
+// 检查是否是拳头
+function checkIsFist(landmarks) {
     if (!landmarks || landmarks.length < 21) return false;
 
-    // 计算两点之间的距离
-    const distance = (p1, p2) => {
-        return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
-    };
-
-    // 获取关键点
+    // 计算关键点到手腕的距离，如果指尖跟手腕很近，说明握拳了
+    const distance = (p1, p2) => Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
     const wrist = landmarks[0];
-    const thumbTip = landmarks[4];
-    const thumbIP = landmarks[3];
-    const thumbMCP = landmarks[2];
-    const indexTip = landmarks[8];
-    const indexDIP = landmarks[7];
-    const indexPIP = landmarks[6];
-    const indexMCP = landmarks[5];
-    const middleTip = landmarks[12];
-    const middlePIP = landmarks[10];
-    const middleMCP = landmarks[9];
-    const ringTip = landmarks[16];
-    const ringPIP = landmarks[14];
-    const pinkyTip = landmarks[20];
-    const pinkyPIP = landmarks[18];
+    const fingerTips = [8, 12, 16, 20]; // 食指、中指、无名指、小指尖
+    const knuckles = [5, 9, 13, 17]; // 指根 MCP 节点
 
-    // 食指：计算从指根到指尖的距离，检查是否伸直
-    const indexLength = distance(indexMCP, indexTip);
-    const indexBendDist = distance(indexMCP, indexPIP) + distance(indexPIP, indexDIP) + distance(indexDIP, indexTip);
-    const indexExtended = indexBendDist / indexLength < 1.4; // 放宽阈值，更容易识别
+    let collapsedCount = 0;
+    for (let i = 0; i < fingerTips.length; i++) {
+        const tipDist = distance(wrist, landmarks[fingerTips[i]]);
+        const knuckleDist = distance(wrist, landmarks[knuckles[i]]);
 
-    // 拇指：检查是否伸展开
-    const thumbLength = distance(thumbMCP, thumbTip);
-    const thumbExtended = thumbLength > 0.06; // 降低阈值，更容易识别
-
-    // 中指、无名指、小指：检查是否弯曲（指尖距离手腕比指根距离手腕更远说明弯曲）
-    const middleWristDist = distance(wrist, middleTip);
-    const middleMCPWristDist = distance(wrist, middleMCP);
-    const middleBent = middleWristDist < middleMCPWristDist + 0.05;
-
-    const ringWristDist = distance(wrist, ringTip);
-    const ringMCPWristDist = distance(wrist, landmarks[13]);
-    const ringBent = ringWristDist < ringMCPWristDist + 0.05;
-
-    const pinkyWristDist = distance(wrist, pinkyTip);
-    const pinkyMCPWristDist = distance(wrist, landmarks[17]);
-    const pinkyBent = pinkyWristDist < pinkyMCPWristDist + 0.05;
-
-    // 枪的手势：食指伸直，拇指伸展，中指、无名指、小指弯曲
-    // 放宽判断条件，至少两个手指弯曲即可
-    const bentFingers = [middleBent, ringBent, pinkyBent].filter(b => b).length;
-    const isGun = indexExtended && thumbExtended && bentFingers >= 2;
-
-    // 调试输出
-    if (window.debugGesture) {
-        console.log('Gesture Debug:', {
-            indexExtended,
-            thumbExtended,
-            bentFingers,
-            isGun
-        });
+        // 如果指尖距离手腕比指根距离手腕更近，或者非常接近，说明手指弯曲了
+        if (tipDist < knuckleDist * 1.3) collapsedCount++;
     }
 
-    return isGun;
+    return collapsedCount >= 3;
 }
 
-// 处理瞄准
-function handleAiming() {
-    if (!handLandmarks || !gameState.isPlaying || handLandmarks.length < 21) {
-        // 隐藏瞄准线
-        if (aimingLine) aimingLine.visible = false;
-        return;
-    }
+// 检测挥拳动作 (核心优化：使用手部尺寸变化代替 Z 轴)
+function detectPunchAction(landmarks, handLabel = 'Right') {
+    const wrist = landmarks[0];
+    const indexMCP = landmarks[5];
+    const currentSize = Math.sqrt(Math.pow(indexMCP.x - wrist.x, 2) + Math.pow(indexMCP.y - wrist.y, 2));
 
-    const indexTip = handLandmarks[8];
-    if (!indexTip) {
-        if (aimingLine) aimingLine.visible = false;
-        return;
-    }
+    const state = handStates[handLabel];
+    if (state && state.lastSize !== null) {
+        const deltaSize = currentSize - state.lastSize;
+        const now = Date.now();
 
-    // 显示并更新瞄准线位置
-    if (aimingLine) {
-        aimingLine.visible = true;
-        aimingLine.position.copy(camera.position);
-        aimingLine.quaternion.copy(camera.quaternion);
-    }
-
-    // 检测射击动作（食指快速向上移动）
-    if (lastIndexFingerY !== null) {
-        const deltaY = lastIndexFingerY - indexTip.y;
-
-        if (deltaY > shootingThreshold) {
-            shoot();
-            updateAimStatus('射击！', 'shooting');
-            setTimeout(() => {
-                if (gameState.isAiming) {
-                    updateAimStatus('🎯 瞄准中...', 'aiming');
-                }
-            }, 200);
+        // 阈值提高到 0.04，确保需要明显的“冲拳”动作才触发
+        if (deltaSize > 0.04 && now - state.lastPunchTime > 500) {
+            handlePunch();
+            state.lastPunchTime = now;
         }
     }
-
-    lastIndexFingerY = indexTip.y;
+    if (state) state.lastSize = currentSize;
 }
 
-// 射击
-function shoot() {
-    if (!gameState.isPlaying) return;
-
+// 处理挥拳 (必中逻辑)
+function handlePunch() {
     gameState.shots++;
     updateScore();
+    updateAimStatus('🥊 挥拳攻击！', 'shooting');
 
-    // 创建子弹
-    const bullet = new THREE.Mesh(
-        new THREE.SphereGeometry(0.05, 8, 8),
-        new THREE.MeshBasicMaterial({ color: 0xffff00 })
-    );
+    // 必中逻辑：只要检测到挥拳，就直接触发击中效果
+    onBagHit();
 
-    bullet.position.copy(camera.position);
-    bullet.position.y -= 0.2;
-
-    // 计算射击方向（从相机向前）
-    const direction = new THREE.Vector3(0, 0, -1);
-    direction.applyQuaternion(camera.quaternion);
-
-    bullet.userData = {
-        velocity: direction.multiplyScalar(0.5),
-        lifetime: 0
-    };
-
-    scene.add(bullet);
-    bullets.push(bullet);
+    setTimeout(() => {
+        if (gameState.isPlaying) updateAimStatus('');
+    }, 300);
 }
+
+// 沙包被击中
+function onBagHit() {
+    gameState.score += 50;
+    gameState.hits++;
+    updateScore();
+    playPunchSound();
+
+    // 沙包动画：扭动
+    punchingBag.rotation.x = -Math.PI / 8; // 向后倒
+    punchingBag.userData.velocity = 0.2;
+
+    // 反馈颜色
+    const bagMesh = punchingBag.children[0];
+    bagMesh.material.emissive.setHex(0xff0000);
+    bagMesh.material.emissiveIntensity = 0.8;
+
+    setTimeout(() => {
+        bagMesh.material.emissiveIntensity = 0;
+    }, 200);
+}
+
+// (已弃用)
+function handleAiming() { }
+function shoot() { }
 
 // 检查是否击中靶子（修复版：球体碰撞，支持简化球体和复杂模型）
 function checkHit(bullet) {
@@ -588,19 +563,26 @@ function checkHit(bullet) {
 
 // 更新分数显示
 function updateScore() {
-    document.getElementById('score').textContent = gameState.score;
+    const scoreValEl = document.getElementById('score');
+    if (scoreValEl) scoreValEl.textContent = gameState.score;
+
+    const accuracyEl = document.getElementById('accuracy');
     const accuracy = gameState.shots > 0
         ? Math.round((gameState.hits / gameState.shots) * 100)
         : 0;
-    document.getElementById('accuracy').textContent = `准确率: ${accuracy}%`;
-    document.getElementById('shots').textContent = `射击次数: ${gameState.shots}`;
+    if (accuracyEl) accuracyEl.textContent = `击中率: ${accuracy}%`;
+
+    const shotsEl = document.getElementById('shots');
+    if (shotsEl) shotsEl.textContent = `出拳次数: ${gameState.shots}`;
 }
 
 // 更新手势状态显示
 function updateHandStatus(text) {
     const statusEl = document.getElementById('hand-status');
-    statusEl.textContent = text;
-    statusEl.className = gameState.handDetected ? 'hand-detected' : '';
+    if (statusEl) {
+        statusEl.textContent = text;
+        statusEl.className = gameState.handDetected ? 'hand-detected' : '';
+    }
 }
 
 // 更新瞄准状态显示
@@ -616,12 +598,12 @@ function setupEventListeners() {
     document.addEventListener('keydown', (e) => {
         if (e.code === 'Space') {
             e.preventDefault();
+            initAudio(); // 用户交互后启动音频上下文
 
-            // 如果游戏正在进行且检测到手，则射击
-            if (gameState.isPlaying && handLandmarks) {
-                shoot();
-            } else if (!gameState.isPlaying) {
-                // 否则开始游戏
+            // 如果游戏正在进行则手动模拟出拳（用于测试）
+            if (gameState.isPlaying) {
+                handlePunch();
+            } else {
                 toggleGame();
             }
         }
@@ -659,27 +641,12 @@ function toggleGame() {
 function animate() {
     requestAnimationFrame(animate);
 
-    // 更新子弹并检查碰撞
-    bullets.forEach((bullet, index) => {
-        bullet.position.add(bullet.userData.velocity);
-        bullet.userData.lifetime++;
-
-        // 检查是否击中靶子
-        checkHit(bullet);
-
-        // 移除超出范围的子弹
-        if (bullet.userData.lifetime > 100 || bullet.position.z < -20) {
-            scene.remove(bullet);
-            bullets.splice(index, 1);
-        }
-    });
-
-    // 旋转靶子（如果未被击中）
-    targets.forEach(target => {
-        if (!target.userData.isHit) {
-            target.rotation.z += 0.01;
-        }
-    });
+    // 沙包物理模拟：简单的摆动恢复
+    if (punchingBag) {
+        // 恢复原状的力
+        punchingBag.rotation.x *= 0.95;
+        punchingBag.rotation.z *= 0.95;
+    }
 
     renderer.render(scene, camera);
 }
