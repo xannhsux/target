@@ -1,6 +1,7 @@
 // ES6 Module Imports
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 // Make THREE available globally for debugging
 window.THREE = THREE;
@@ -18,6 +19,7 @@ let gameState = {
 
 // Three.js Scene Setup
 let scene, camera, renderer;
+let controls; // OrbitControls for mouse interaction
 let punchingBag; // Replacing targets array
 let targets = []; // Compatibility array for old code
 let bullets = []; // Keep for compat, no longer used
@@ -125,6 +127,29 @@ function setupThreeJS() {
     aimingLine.computeLineDistances();
     aimingLine.visible = false; // Hidden by default
     scene.add(aimingLine);
+
+    // Setup OrbitControls for mouse interaction
+    controls = new OrbitControls(camera, renderer.domElement);
+
+    // Configure controls
+    controls.enableDamping = true; // Smooth camera movements
+    controls.dampingFactor = 0.05;
+    controls.screenSpacePanning = false; // Don't allow panning up/down
+
+    // Zoom limits
+    controls.minDistance = 2; // Minimum zoom (closer)
+    controls.maxDistance = 15; // Maximum zoom (farther)
+
+    // Rotation limits (prevent flipping upside down)
+    controls.minPolarAngle = Math.PI / 4; // 45 degrees from top
+    controls.maxPolarAngle = Math.PI / 2; // 90 degrees (horizon)
+
+    // Target point (what the camera looks at)
+    controls.target.set(0, 1.5, -5); // Look at target area
+
+    controls.update();
+
+    console.log('🖱️ Mouse controls enabled: Drag to rotate, Scroll to zoom');
 
     // Create Crosshair
     createCrosshair();
@@ -679,15 +704,16 @@ function handlePhotoUpload(event) {
     reader.onload = function (e) {
         const imageUrl = e.target.result;
 
-        // Update preview
-        const previewImg = document.getElementById('preview-img');
-        const previewSection = document.getElementById('photo-preview');
+        // Update preview - DISABLED (user doesn't want preview)
+        // const previewImg = document.getElementById('preview-img');
+        // const previewSection = document.getElementById('photo-preview');
         const resetBtn = document.getElementById('reset-target-btn');
 
-        if (previewImg && previewSection) {
-            previewImg.src = imageUrl;
-            previewSection.style.display = 'block';
-        }
+        // Don't show preview
+        // if (previewImg && previewSection) {
+        //     previewImg.src = imageUrl;
+        //     previewSection.style.display = 'block';
+        // }
 
         if (resetBtn) {
             resetBtn.style.display = 'block';
@@ -753,7 +779,7 @@ function createCustomPhotoTarget(imageUrl) {
 
             // Set target size - larger for better visibility
             // With high pixel ratio rendering, larger targets still look sharp
-            const targetHeight = 3.0; // Increased for better visibility
+            const targetHeight = 5.0; // Increased for better visibility
             const targetWidth = targetHeight * aspectRatio; // Maintain photo aspect ratio
 
             console.log(`📐 Target dimensions: ${targetWidth.toFixed(2)} x ${targetHeight}m (aspect ratio: ${aspectRatio.toFixed(2)})`);
@@ -853,6 +879,11 @@ function resetToDefaultTarget() {
 // Animation Loop
 function animate() {
     requestAnimationFrame(animate);
+
+    // Update OrbitControls for smooth damping
+    if (controls) {
+        controls.update();
+    }
 
     // Bag physical simulation: Simple sway recovery
     if (punchingBag) {
