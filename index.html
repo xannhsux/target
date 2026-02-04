@@ -24,6 +24,21 @@
                 <p>🔊 <strong>Sound Effects</strong>: "Bang Bang" sound on hit</p>
                 <p>Press SPACE to Start/Pause</p>
             </div>
+            <div id="photo-upload-section">
+                <h3>📸 Custom Target</h3>
+                <p>Upload a photo to create your punching target!</p>
+                <div id="upload-controls">
+                    <label for="photo-input" class="upload-btn">
+                        Choose Photo
+                        <input type="file" id="photo-input" accept="image/*" style="display: none;">
+                    </label>
+                    <button id="reset-target-btn" class="reset-btn" style="display: none;">Use Default Rabbit</button>
+                </div>
+                <div id="photo-preview" style="display: none;">
+                    <img id="preview-img" src="" alt="Preview">
+                    <p id="preview-label">Current Target</p>
+                </div>
+            </div>
             <div id="status">
                 <div id="hand-status">Waiting for gesture...</div>
                 <div id="aim-status"></div>

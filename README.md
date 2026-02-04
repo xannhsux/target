@@ -31,6 +31,12 @@ An immersive, gesture-controlled 3D boxing game built with **Three.js** and **Me
    - Show your fists to the camera.
    - Strike forward!
 
+4. **Custom Photo Target (Optional)**
+   - Click the "Choose Photo" button in the bottom-right corner.
+   - Upload any photo you want to punch.
+   - The photo will become your new 3D target!
+   - Click "Use Default Rabbit" to switch back.
+
 ## 🛠️ Technical Stack
 
 - **Three.js**: Modern 3D rendering and physics visualization.

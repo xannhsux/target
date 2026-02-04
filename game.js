@@ -39,6 +39,11 @@ let handStates = {
 let punchSizeThreshold = 0.04;
 let lastPunchTime = 0;
 
+// Custom Photo Target
+let customPhotoTexture = null;
+let customTargetMesh = null;
+let usingCustomTarget = false;
+
 // Initialization
 async function init() {
     setupThreeJS();
@@ -69,6 +74,11 @@ function setupThreeJS() {
         antialias: true
     });
     renderer.setSize(window.innerWidth, window.innerHeight);
+
+    // CRITICAL: Set pixel ratio for high-DPI displays (Retina, etc.)
+    // This makes textures much sharper on modern displays
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Cap at 2x for performance
+
     renderer.shadowMap.enabled = true;
 
     // Lights - Enhanced for better rabbit visibility
@@ -500,29 +510,63 @@ function onBagHit() {
         punchingBag.rotation.x = -Math.PI / 8;
         punchingBag.userData.velocity = 0.2;
 
-        // Visual feedback: Flash red on all meshes
-        punchingBag.traverse((node) => {
-            if (node.isMesh && node.material) {
-                // Store original emissive if not already stored
-                if (!node.userData.originalEmissive) {
-                    node.userData.originalEmissive = node.material.emissive ? node.material.emissive.clone() : new THREE.Color(0x000000);
-                }
+        // Different visual feedback for custom photo vs default model
+        if (usingCustomTarget) {
+            // For custom photo: Use scale pulse instead of color flash
+            const originalScale = punchingBag.scale.clone();
 
-                if (node.material.emissive) {
-                    node.material.emissive.setHex(0xff0000);
-                    node.material.emissiveIntensity = 0.8;
-                }
-            }
-        });
+            // Quick shrink
+            punchingBag.scale.set(
+                originalScale.x * 0.9,
+                originalScale.y * 0.9,
+                originalScale.z * 0.9
+            );
 
-        // Reset after flash
-        setTimeout(() => {
+            // Add a colored ring effect behind the photo
             punchingBag.traverse((node) => {
-                if (node.isMesh && node.material && node.material.emissive) {
-                    node.material.emissiveIntensity = 0;
+                if (node.isMesh && node.geometry.type === 'BoxGeometry') {
+                    // This is the backing board
+                    if (node.material) {
+                        const originalColor = node.material.color.clone();
+                        node.material.color.setHex(0xff3333); // Red flash on backing
+
+                        setTimeout(() => {
+                            node.material.color.copy(originalColor);
+                        }, 200);
+                    }
                 }
             });
-        }, 200);
+
+            // Restore scale
+            setTimeout(() => {
+                punchingBag.scale.copy(originalScale);
+            }, 100);
+
+        } else {
+            // For default model: Use emissive red flash
+            punchingBag.traverse((node) => {
+                if (node.isMesh && node.material) {
+                    // Store original emissive if not already stored
+                    if (!node.userData.originalEmissive) {
+                        node.userData.originalEmissive = node.material.emissive ? node.material.emissive.clone() : new THREE.Color(0x000000);
+                    }
+
+                    if (node.material.emissive) {
+                        node.material.emissive.setHex(0xff0000);
+                        node.material.emissiveIntensity = 0.8;
+                    }
+                }
+            });
+
+            // Reset after flash
+            setTimeout(() => {
+                punchingBag.traverse((node) => {
+                    if (node.isMesh && node.material && node.material.emissive) {
+                        node.material.emissiveIntensity = 0;
+                    }
+                });
+            }, 200);
+        }
     }
 }
 
@@ -584,6 +628,18 @@ function setupEventListeners() {
         camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
     });
+
+    // Photo Upload
+    const photoInput = document.getElementById('photo-input');
+    const resetBtn = document.getElementById('reset-target-btn');
+
+    if (photoInput) {
+        photoInput.addEventListener('change', handlePhotoUpload);
+    }
+
+    if (resetBtn) {
+        resetBtn.addEventListener('click', resetToDefaultTarget);
+    }
 }
 
 // Toggle Game Play State
@@ -605,6 +661,194 @@ function toggleGame() {
         updateAimStatus('Press SPACE to Resume');
     }
 }
+
+// Handle Photo Upload
+function handlePhotoUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+        alert('Please upload an image file!');
+        return;
+    }
+
+    // Create file reader
+    const reader = new FileReader();
+
+    reader.onload = function (e) {
+        const imageUrl = e.target.result;
+
+        // Update preview
+        const previewImg = document.getElementById('preview-img');
+        const previewSection = document.getElementById('photo-preview');
+        const resetBtn = document.getElementById('reset-target-btn');
+
+        if (previewImg && previewSection) {
+            previewImg.src = imageUrl;
+            previewSection.style.display = 'block';
+        }
+
+        if (resetBtn) {
+            resetBtn.style.display = 'block';
+        }
+
+        // Create custom 3D target with the photo
+        createCustomPhotoTarget(imageUrl);
+
+        console.log('✅ Photo uploaded successfully!');
+    };
+
+    reader.readAsDataURL(file);
+}
+
+// Create Custom Photo Target
+function createCustomPhotoTarget(imageUrl) {
+    // Load image as texture
+    const textureLoader = new THREE.TextureLoader();
+
+    textureLoader.load(
+        imageUrl,
+        function (texture) {
+            customPhotoTexture = texture;
+
+            // Debug texture loading
+            console.log('📸 Texture loaded:', {
+                width: texture.image ? texture.image.width : 'unknown',
+                height: texture.image ? texture.image.height : 'unknown',
+                format: texture.format,
+                type: texture.type
+            });
+
+            // CRITICAL: Set high-quality texture settings for sharp display
+            // Use trilinear filtering (best quality)
+            texture.minFilter = THREE.LinearMipmapLinearFilter; // Best quality when zoomed out
+            texture.magFilter = THREE.LinearFilter; // Best quality when zoomed in
+            texture.generateMipmaps = true; // Generate mipmaps for better quality
+            texture.wrapS = THREE.ClampToEdgeWrapping;
+            texture.wrapT = THREE.ClampToEdgeWrapping;
+
+            // Maximize anisotropic filtering for sharpness at angles
+            const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
+            if (maxAnisotropy > 1) {
+                texture.anisotropy = maxAnisotropy; // Usually 16x on modern GPUs
+            }
+
+            texture.needsUpdate = true;
+
+            console.log(`🎨 Texture settings: minFilter=LinearMipmapLinear, magFilter=Linear, anisotropy=${texture.anisotropy}x`);
+
+            // Remove old custom target if exists
+            if (customTargetMesh) {
+                scene.remove(customTargetMesh);
+            }
+
+            // Create a humanoid-shaped target (body + head)
+            const targetGroup = new THREE.Group();
+
+            // Calculate aspect ratio from photo
+            const photoWidth = texture.image.width;
+            const photoHeight = texture.image.height;
+            const aspectRatio = photoWidth / photoHeight;
+
+            // Set target size - larger for better visibility
+            // With high pixel ratio rendering, larger targets still look sharp
+            const targetHeight = 3.0; // Increased for better visibility
+            const targetWidth = targetHeight * aspectRatio; // Maintain photo aspect ratio
+
+            console.log(`📐 Target dimensions: ${targetWidth.toFixed(2)} x ${targetHeight}m (aspect ratio: ${aspectRatio.toFixed(2)})`);
+            console.log(`📸 Photo resolution: ${photoWidth} x ${photoHeight}px`);
+            console.log(`🖥️ Renderer pixel ratio: ${renderer.getPixelRatio()}x`);
+
+            // Body (rectangle with photo texture)
+            const bodyGeometry = new THREE.PlaneGeometry(targetWidth, targetHeight);
+
+            // Use MeshBasicMaterial - doesn't need lighting, always visible
+            const bodyMaterial = new THREE.MeshBasicMaterial({
+                map: texture,
+                side: THREE.DoubleSide
+            });
+
+            const bodyMesh = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            bodyMesh.position.y = 1.25;
+            bodyMesh.position.z = 0.06; // Move forward to be in front of backing board
+            targetGroup.add(bodyMesh);
+
+            // Add a simple backing board for depth (match photo size)
+            const backGeometry = new THREE.BoxGeometry(targetWidth, targetHeight, 0.1);
+            const backMaterial = new THREE.MeshStandardMaterial({
+                color: 0x333333
+            });
+            const backMesh = new THREE.Mesh(backGeometry, backMaterial);
+            backMesh.position.y = 1.25;
+            backMesh.position.z = -0.05;
+            backMesh.castShadow = true;
+            targetGroup.add(backMesh);
+
+            // Position the target
+            targetGroup.position.set(0, 1, -5);
+
+            // Hide default rabbit
+            if (punchingBag && !usingCustomTarget) {
+                punchingBag.visible = false;
+            }
+
+            // Add to scene
+            scene.add(targetGroup);
+            customTargetMesh = targetGroup;
+            punchingBag = targetGroup; // Make this the active target
+            targets = [targetGroup];
+            usingCustomTarget = true;
+
+            console.log('✅ Custom photo target created!');
+        },
+        undefined,
+        function (error) {
+            console.error('❌ Error loading photo texture:', error);
+            alert('Failed to load photo. Please try again.');
+        }
+    );
+}
+
+// Reset to Default Rabbit Target
+function resetToDefaultTarget() {
+    // Hide custom target
+    if (customTargetMesh) {
+        customTargetMesh.visible = false;
+    }
+
+    // Show rabbit
+    if (punchingBag && usingCustomTarget) {
+        // Find the original rabbit in the scene
+        scene.traverse((object) => {
+            if (object.isGroup && object !== customTargetMesh) {
+                // Check if this looks like a loaded GLTF model
+                if (object.children.length > 0 && object.children[0].isMesh) {
+                    object.visible = true;
+                    punchingBag = object;
+                    targets = [object];
+                }
+            }
+        });
+    }
+
+    usingCustomTarget = false;
+
+    // Hide preview
+    const previewSection = document.getElementById('photo-preview');
+    const resetBtn = document.getElementById('reset-target-btn');
+
+    if (previewSection) {
+        previewSection.style.display = 'none';
+    }
+
+    if (resetBtn) {
+        resetBtn.style.display = 'none';
+    }
+
+    console.log('✅ Reset to default rabbit target');
+}
+
 
 // Animation Loop
 function animate() {
