@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Test Three.js Imports</title>
+</head>
+
+<body>
+    <h1>Testing Three.js ES Module Imports</h1>
+    <div id="output"></div>
+
+    <script async src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.158.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        const output = document.getElementById('output');
+
+        try {
+            output.innerHTML += '<p>1. Importing THREE...</p>';
+            const THREE = await import('three');
+            output.innerHTML += '<p>✅ THREE imported: ' + typeof THREE.Scene + '</p>';
+
+            output.innerHTML += '<p>2. Importing GLTFLoader...</p>';
+            const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
+            output.innerHTML += '<p>✅ GLTFLoader imported: ' + typeof GLTFLoader + '</p>';
+
+            output.innerHTML += '<p>3. Creating GLTFLoader instance...</p>';
+            const loader = new GLTFLoader();
+            output.innerHTML += '<p>✅ GLTFLoader instance created: ' + typeof loader + '</p>';
+
+            output.innerHTML += '<p style="color: green; font-weight: bold;">ALL TESTS PASSED!</p>';
+        } catch (error) {
+            output.innerHTML += '<p style="color: red;">❌ ERROR: ' + error.message + '</p>';
+            output.innerHTML += '<pre>' + error.stack + '</pre>';
+        }
+    </script>
+</body>
+
+</html>

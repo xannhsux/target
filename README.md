@@ -1,6 +1,6 @@
-# 3D Gesture Punching Game 🥊🎯
+# 3D Gesture Punching Game 🥊🐰
 
-An immersive, gesture-controlled 3D boxing game built with **Three.js** and **MediaPipe Hands**. Box with a virtual punching bag using your bare hands!
+An immersive, gesture-controlled 3D boxing game built with **Three.js** and **MediaPipe Hands**. Punch a virtual rabbit using your bare hands against a dramatic black background!
 
 ## 🌟 Key Features
 
@@ -10,8 +10,8 @@ An immersive, gesture-controlled 3D boxing game built with **Three.js** and **Me
   - **Strike**: Move your hand forward quickly to hit the bag.
 - � **Guaranteed Hit System**: Simplified collision logic ensures every valid punch gesture registers as a satisfying hit.
 - 🎨 **Rich Visual Feedback**:
-  - Balanced Three.js 3D environment with lighting and fog.
-  - Dynamic "Bag Tilt" animation and red flash on impact.
+  - Dramatic black background with enhanced lighting on the 3D rabbit model.
+  - Dynamic rabbit tilt animation and red flash on impact.
   - Color-coded hand tracking (Red for Left, Blue for Right).
 - 📊 **Real-time Stats**: Track your Score, Accuracy, and total Punch count.
 - 🔊 **Audio Experience**: Positional-style "Bang Bang" sound effects for every hit.

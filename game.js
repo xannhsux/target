@@ -1,3 +1,10 @@
+// ES6 Module Imports
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+// Make THREE available globally for debugging
+window.THREE = THREE;
+
 // Game State
 let gameState = {
     score: 0,
@@ -12,8 +19,10 @@ let gameState = {
 // Three.js Scene Setup
 let scene, camera, renderer;
 let punchingBag; // Replacing targets array
+let targets = []; // Compatibility array for old code
 let bullets = []; // Keep for compat, no longer used
 let aimingLine;
+let crosshair; // Crosshair group attached to camera
 let audioCtx;
 
 // Hand Detection
@@ -43,8 +52,7 @@ async function init() {
 // Setup Three.js Scene
 function setupThreeJS() {
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x1a1a2e);
-    scene.fog = new THREE.Fog(0x1a1a2e, 10, 50);
+    scene.background = new THREE.Color(0x000000); // Pure black background
 
     // Camera
     camera = new THREE.PerspectiveCamera(
@@ -63,19 +71,24 @@ function setupThreeJS() {
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
 
-    // Lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    // Lights - Enhanced for better rabbit visibility
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8); // Increased ambient light
     scene.add(ambientLight);
 
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0); // Increased intensity
     directionalLight.position.set(5, 10, 5);
     directionalLight.castShadow = true;
     scene.add(directionalLight);
 
+    // Add a second light from the front for better visibility
+    const frontLight = new THREE.DirectionalLight(0xffffff, 0.6);
+    frontLight.position.set(0, 5, 10);
+    scene.add(frontLight);
+
     // Create Floor
     const groundGeometry = new THREE.PlaneGeometry(50, 50);
     const groundMaterial = new THREE.MeshStandardMaterial({
-        color: 0x2d2d44,
+        color: 0x000000, // Black floor to match background
         roughness: 0.8
     });
     const ground = new THREE.Mesh(groundGeometry, groundMaterial);
@@ -138,34 +151,54 @@ function createCrosshair() {
     crosshair = crosshairGroup;
 }
 
-// Create Punching Bag
+// Create Punching Target (Rabbit GLB Model)
 function createTargets() {
-    const bagGroup = new THREE.Group();
+    const loader = new GLTFLoader();
 
-    // Main Bag
-    const bagGeometry = new THREE.CylinderGeometry(0.8, 0.8, 3, 32);
-    const bagMaterial = new THREE.MeshStandardMaterial({
-        color: 0x8b0000,
-        roughness: 0.5,
-        metalness: 0.2
-    });
-    const bagMesh = new THREE.Mesh(bagGeometry, bagMaterial);
-    bagMesh.position.y = -1.5; // Pivot at top
-    bagGroup.add(bagMesh);
+    loader.load(
+        'rabbit.glb',
+        function (gltf) {
+            // Successfully loaded the rabbit model
+            const rabbitModel = gltf.scene;
 
-    // Rope
-    const ropeGeometry = new THREE.CylinderGeometry(0.05, 0.05, 2, 8);
-    const ropeMaterial = new THREE.MeshStandardMaterial({ color: 0x000000 });
-    const rope = new THREE.Mesh(ropeGeometry, ropeMaterial);
-    rope.position.y = 1;
-    bagGroup.add(rope);
+            // Scale and position the rabbit
+            rabbitModel.scale.set(2, 2, 2); // Adjust size as needed
+            rabbitModel.position.set(0, 2, -5); // Position in front of camera
 
-    bagGroup.position.set(0, 4, -5); // Hanging in front
-    scene.add(bagGroup);
-    punchingBag = bagGroup;
+            // Enable shadows
+            rabbitModel.traverse((node) => {
+                if (node.isMesh) {
+                    node.castShadow = true;
+                    node.receiveShadow = true;
+                }
+            });
 
-    // Compatibility with old detection code
-    targets = [bagMesh];
+            scene.add(rabbitModel);
+            punchingBag = rabbitModel;
+
+            // Compatibility with old detection code
+            targets = [rabbitModel];
+
+            console.log('✅ Rabbit model loaded successfully!');
+        },
+        function (xhr) {
+            // Loading progress
+            console.log((xhr.loaded / xhr.total * 100) + '% loaded');
+        },
+        function (error) {
+            // Error loading model
+            console.error('❌ Error loading rabbit.glb:', error);
+
+            // Fallback: create a simple cube as placeholder
+            const fallbackGeometry = new THREE.BoxGeometry(1, 1, 1);
+            const fallbackMaterial = new THREE.MeshStandardMaterial({ color: 0xff00ff });
+            const fallbackMesh = new THREE.Mesh(fallbackGeometry, fallbackMaterial);
+            fallbackMesh.position.set(0, 2, -5);
+            scene.add(fallbackMesh);
+            punchingBag = fallbackMesh;
+            targets = [fallbackMesh];
+        }
+    );
 }
 
 // Initialize Audio
@@ -463,17 +496,34 @@ function onBagHit() {
     playPunchSound();
 
     // Bag animation: Tilt back
-    punchingBag.rotation.x = -Math.PI / 8;
-    punchingBag.userData.velocity = 0.2;
+    if (punchingBag) {
+        punchingBag.rotation.x = -Math.PI / 8;
+        punchingBag.userData.velocity = 0.2;
 
-    // Visual feedback: Flash red
-    const bagMesh = punchingBag.children[0];
-    bagMesh.material.emissive.setHex(0xff0000);
-    bagMesh.material.emissiveIntensity = 0.8;
+        // Visual feedback: Flash red on all meshes
+        punchingBag.traverse((node) => {
+            if (node.isMesh && node.material) {
+                // Store original emissive if not already stored
+                if (!node.userData.originalEmissive) {
+                    node.userData.originalEmissive = node.material.emissive ? node.material.emissive.clone() : new THREE.Color(0x000000);
+                }
 
-    setTimeout(() => {
-        bagMesh.material.emissiveIntensity = 0;
-    }, 200);
+                if (node.material.emissive) {
+                    node.material.emissive.setHex(0xff0000);
+                    node.material.emissiveIntensity = 0.8;
+                }
+            }
+        });
+
+        // Reset after flash
+        setTimeout(() => {
+            punchingBag.traverse((node) => {
+                if (node.isMesh && node.material && node.material.emissive) {
+                    node.material.emissiveIntensity = 0;
+                }
+            });
+        }, 200);
+    }
 }
 
 // (Legacy/Deprecated functions)
