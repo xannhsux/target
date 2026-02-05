@@ -481,9 +481,10 @@ function updateParticles(deltaTime) {
 
 // Play hit sound
 async function playPunchSound() {
-    // Initialize audio if not already done
+    // Ensure audio context exists
     if (!audioCtx) {
-        initAudio();
+        console.warn('⚠️ AudioContext not initialized when trying to play sound');
+        return;
     }
 
     // CRITICAL: Aggressively resume audio context on EVERY sound play attempt (for mobile)
@@ -498,6 +499,8 @@ async function playPunchSound() {
     }
 
     try {
+        console.log('🎵 Playing punch sound, AudioContext state:', audioCtx.state);
+
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
 
@@ -525,6 +528,8 @@ async function playPunchSound() {
         gain2.connect(audioCtx.destination);
         osc2.start();
         osc2.stop(audioCtx.currentTime + 0.05);
+
+        console.log('✅ Punch sound oscillators created and started');
     } catch (err) {
         console.error('❌ Error playing punch sound:', err);
     }
@@ -905,7 +910,17 @@ function setupEventListeners() {
     document.addEventListener('keydown', (e) => {
         if (e.code === 'Space') {
             e.preventDefault();
-            initAudio(); // Start audio context on user interaction
+
+            // CRITICAL: Initialize audio context SYNCHRONOUSLY in event handler (iOS requirement)
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                console.log('🔊 AudioContext created on space key, state:', audioCtx.state);
+            }
+
+            // Resume if suspended
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
 
             if (gameState.isPlaying) {
                 // Manual punch simulation for testing
@@ -921,8 +936,18 @@ function setupEventListeners() {
     if (canvas) {
         // Handle both click and touch events
         const handleCanvasInteraction = (e) => {
-            // CRITICAL: Initialize/resume audio on EVERY user interaction (required for iOS)
-            initAudio();
+            // CRITICAL: Initialize audio context SYNCHRONOUSLY in event handler (iOS requirement)
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                console.log('🔊 AudioContext created on canvas interaction, state:', audioCtx.state);
+            }
+
+            // CRITICAL: Resume audio context if suspended (iOS requirement)
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume().then(() => {
+                    console.log('🔊 Audio context resumed on canvas interaction, state:', audioCtx.state);
+                });
+            }
 
             // Only toggle game if not already playing (avoid accidental punches)
             if (!gameState.isPlaying) {
@@ -997,34 +1022,49 @@ function setupEventListeners() {
     // Audio Test Button - CRITICAL for iOS/iPad audio unlock
     const audioTestBtn = document.getElementById('audio-test-btn');
     if (audioTestBtn) {
-        audioTestBtn.addEventListener('click', async () => {
+        audioTestBtn.addEventListener('click', function () {
             console.log('🔊 Audio test button clicked');
 
-            // Initialize audio context
-            initAudio();
-
-            // Force resume
-            if (audioCtx && audioCtx.state !== 'running') {
-                try {
-                    await audioCtx.resume();
-                    console.log('🔊 Audio context state after resume:', audioCtx.state);
-                } catch (err) {
-                    console.error('❌ Failed to resume audio:', err);
-                }
+            // CRITICAL: Initialize audio context SYNCHRONOUSLY in event handler (iOS requirement)
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                console.log('🔊 AudioContext created in click handler, state:', audioCtx.state);
             }
 
-            // Play a test sound
-            await playPunchSound();
+            // CRITICAL: Resume SYNCHRONOUSLY in event handler (iOS requirement)
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume().then(() => {
+                    console.log('🔊 Audio context resumed, state:', audioCtx.state);
+                    // Play sound after successful resume
+                    playTestSound();
+                }).catch(err => {
+                    console.error('❌ Failed to resume audio:', err);
+                });
+            } else {
+                console.log('🔊 Audio context already running, state:', audioCtx.state);
+                // Play sound immediately
+                playTestSound();
+            }
 
-            // Give user feedback
-            const originalText = audioTestBtn.textContent;
-            audioTestBtn.textContent = audioCtx && audioCtx.state === 'running'
-                ? '✅ Audio Ready!'
-                : '❌ Audio Failed';
+            // Helper function to play test sound and update button
+            function playTestSound() {
+                // Play the test sound
+                playPunchSound().then(() => {
+                    console.log('✅ Test sound played successfully');
+                }).catch(err => {
+                    console.error('❌ Failed to play test sound:', err);
+                });
 
-            setTimeout(() => {
-                audioTestBtn.textContent = originalText;
-            }, 1500);
+                // Give user feedback
+                const originalText = audioTestBtn.textContent;
+                audioTestBtn.textContent = audioCtx && audioCtx.state === 'running'
+                    ? '✅ Audio Ready!'
+                    : '❌ Audio Failed';
+
+                setTimeout(() => {
+                    audioTestBtn.textContent = originalText;
+                }, 1500);
+            }
         });
     }
 }
