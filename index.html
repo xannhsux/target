@@ -23,7 +23,15 @@
                 <p>🥊 <strong>Quick Punch</strong>: Move hand forward to hit</p>
                 <p>Press SPACE to Start/Pause</p>
             </div>
-            <div id="photo-upload-section">
+            <div id="target-selector">
+                <h3>🎯 Select Target Type</h3>
+                <div class="target-buttons">
+                    <button id="rabbit-target-btn" class="target-btn active">🐰 Rabbit</button>
+                    <button id="cell-target-btn" class="target-btn">🦠 Cell</button>
+                    <button id="photo-target-btn" class="target-btn">📸 Photo</button>
+                </div>
+            </div>
+            <div id="photo-upload-section" style="display: none;">
                 <h3>📸 Custom Target</h3>
                 <p>Upload a photo to create your punching target!</p>
                 <div id="upload-controls">
@@ -38,6 +46,7 @@
                     <p id="preview-label">Current Target</p>
                 </div>
             </div>
+
             <div id="status">
                 <div id="hand-status">Waiting for gesture...</div>
                 <div id="aim-status"></div>

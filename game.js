@@ -46,6 +46,12 @@ let customPhotoTexture = null;
 let customTargetMesh = null;
 let usingCustomTarget = false;
 
+// Cancer Cell Particle Target
+let cellParticles = []; // Active particles from cell explosions
+let cellTarget = null; // The organic cell sphere
+let usingCellTarget = false;
+let targetType = 'rabbit'; // 'rabbit', 'photo', or 'cell'
+
 // Initialization
 async function init() {
     setupThreeJS();
@@ -53,6 +59,7 @@ async function init() {
     await setupHandDetection();
     setupEventListeners();
     createTargets();
+    createCellTarget(); // Create the cancer cell target
     animate();
 }
 
@@ -236,12 +243,226 @@ function createTargets() {
     );
 }
 
+// Create Cancer Cell Target (Particle Cloud)
+function createCellTarget() {
+    // Create a group to hold all the particles
+    const particleGroup = new THREE.Group();
+    particleGroup.position.set(0, 2, -5);
+
+    // Number of particles forming the initial cloud
+    const particleCount = 800; // More particles for denser cloud
+    const cloudRadius = 1.5; // Radius of the particle cloud
+
+    // Store particle meshes for animation
+    const cloudParticles = [];
+
+    for (let i = 0; i < particleCount; i++) {
+        // Create varying particle sizes for depth
+        const size = 0.02 + Math.random() * 0.06; // Very small particles: 0.02-0.08
+        const particleGeometry = new THREE.SphereGeometry(size, 4, 4);
+
+        // Color variation for organic look
+        const colorChoice = Math.random();
+        let particleColor;
+        if (colorChoice < 0.3) {
+            particleColor = 0xff69b4; // Hot pink
+        } else if (colorChoice < 0.6) {
+            particleColor = 0xff1493; // Deep pink
+        } else if (colorChoice < 0.8) {
+            particleColor = 0xda70d6; // Orchid
+        } else {
+            particleColor = 0xffc0cb; // Light pink
+        }
+
+        const particleMaterial = new THREE.MeshBasicMaterial({
+            color: particleColor,
+            transparent: true,
+            opacity: 0.6 + Math.random() * 0.4, // Varying opacity
+        });
+
+        const particle = new THREE.Mesh(particleGeometry, particleMaterial);
+
+        // Random position within a sphere (using spherical coordinates)
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(2 * Math.random() - 1);
+        const r = Math.pow(Math.random(), 0.7) * cloudRadius; // Denser in center
+
+        particle.position.x = r * Math.sin(phi) * Math.cos(theta);
+        particle.position.y = r * Math.sin(phi) * Math.sin(theta);
+        particle.position.z = r * Math.cos(phi);
+
+        // Store animation data for floating effect
+        particle.userData = {
+            originalPos: particle.position.clone(),
+            floatSpeed: 0.3 + Math.random() * 0.5,
+            floatOffset: Math.random() * Math.PI * 2,
+            floatRadius: 0.05 + Math.random() * 0.1
+        };
+
+        particleGroup.add(particle);
+        cloudParticles.push(particle);
+    }
+
+    // Store the group
+    cellTarget = particleGroup;
+    cellTarget.userData.cloudParticles = cloudParticles;
+    cellTarget.userData.isParticleCloud = true;
+    cellTarget.visible = false;
+
+    scene.add(particleGroup);
+    console.log('🦠 Particle cloud cell target created with', particleCount, 'particles!');
+}
+
+
+
 // Initialize Audio
 function initAudio() {
     if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     }
 }
+
+// Create Particle Explosion when Cell is Hit
+function createCellExplosion(hitPosition, punchDirection) {
+    if (!cellTarget || !cellTarget.userData.cloudParticles) return;
+
+    // Get the existing cloud particles
+    const cloudParticles = cellTarget.userData.cloudParticles;
+
+    // Hide the cell target group
+    cellTarget.visible = false;
+
+    // Get world position of the cloud
+    const cloudWorldPos = new THREE.Vector3();
+    cellTarget.getWorldPosition(cloudWorldPos);
+
+    // Transfer particles from group to scene and give them explosion velocities
+    cloudParticles.forEach(particle => {
+        // Get particle's world position before removing from group
+        const worldPos = new THREE.Vector3();
+        particle.getWorldPosition(worldPos);
+
+        // Remove from group
+        cellTarget.remove(particle);
+
+        // Set absolute position
+        particle.position.copy(worldPos);
+
+        // Add to scene
+        scene.add(particle);
+
+        // Calculate explosion direction from center
+        const particleDir = new THREE.Vector3()
+            .subVectors(particle.position, cloudWorldPos)
+            .normalize();
+
+        // Mix with punch direction
+        const punchInfluence = 0.4;
+        const explosionDir = particleDir
+            .multiplyScalar(1 - punchInfluence)
+            .add(punchDirection.clone().multiplyScalar(punchInfluence))
+            .normalize();
+
+        // Add some randomness
+        explosionDir.add(new THREE.Vector3(
+            (Math.random() - 0.5) * 0.3,
+            (Math.random() - 0.5) * 0.3,
+            (Math.random() - 0.5) * 0.3
+        )).normalize();
+
+        // Velocity based on distance from center (outer particles fly faster)
+        const distanceFromCenter = particle.position.distanceTo(cloudWorldPos);
+        const baseSpeed = 2 + distanceFromCenter * 1.5;
+        const speed = baseSpeed + Math.random() * 2;
+
+        // Store explosion physics data
+        particle.userData.velocity = explosionDir.multiplyScalar(speed);
+        particle.userData.lifetime = 0;
+        particle.userData.maxLifetime = 1.5 + Math.random() * 1.5;
+        particle.userData.originalOpacity = particle.material.opacity;
+        particle.userData.damping = 0.96;
+
+        // Add to active particles list
+        cellParticles.push(particle);
+    });
+
+    console.log(`💥 Particle cloud exploded! ${cloudParticles.length} particles dispersing!`);
+
+    // Respawn cell after delay (quick respawn for continuous action!)
+    setTimeout(() => {
+        if (targetType === 'cell') {
+            respawnCellTarget();
+        }
+    }, 600); // Fast respawn - only 0.6 seconds!
+}
+
+
+
+// Respawn Cell Target
+function respawnCellTarget() {
+    if (!cellTarget) return;
+
+    // Clear any remaining particles
+    cellParticles.forEach(particle => {
+        scene.remove(particle);
+        if (particle.geometry) particle.geometry.dispose();
+        if (particle.material) particle.material.dispose();
+    });
+    cellParticles = [];
+
+    // Recreate the cell (with new random deformation)
+    scene.remove(cellTarget);
+    if (cellTarget.geometry) cellTarget.geometry.dispose();
+    if (cellTarget.material) cellTarget.material.dispose();
+
+    createCellTarget();
+
+    // Show the cell if it's still the active target
+    if (targetType === 'cell') {
+        cellTarget.visible = true;
+        punchingBag = cellTarget;
+    }
+
+    console.log('🔄 Cell target respawned!');
+}
+
+// Update Particles (called every frame)
+function updateParticles(deltaTime) {
+    for (let i = cellParticles.length - 1; i >= 0; i--) {
+        const particle = cellParticles[i];
+
+        // Update lifetime
+        particle.userData.lifetime += deltaTime;
+
+        // Update position based on velocity
+        particle.position.add(
+            particle.userData.velocity.clone().multiplyScalar(deltaTime)
+        );
+
+        // Apply damping (gradual slowdown)
+        particle.userData.velocity.multiplyScalar(particle.userData.damping);
+
+        // Apply gravity (slight downward pull for organic feel)
+        particle.userData.velocity.y -= 2 * deltaTime;
+
+        // Fade out based on lifetime
+        const lifeRatio = particle.userData.lifetime / particle.userData.maxLifetime;
+        if (lifeRatio > 0.7) {
+            // Start fading in last 30% of lifetime
+            const fadeAmount = 1 - ((lifeRatio - 0.7) / 0.3);
+            particle.material.opacity = particle.userData.originalOpacity * fadeAmount;
+        }
+
+        // Remove particle if lifetime exceeded
+        if (particle.userData.lifetime >= particle.userData.maxLifetime) {
+            scene.remove(particle);
+            if (particle.geometry) particle.geometry.dispose();
+            if (particle.material) particle.material.dispose();
+            cellParticles.splice(i, 1);
+        }
+    }
+}
+
 
 // Play hit sound
 function playPunchSound() {
@@ -530,7 +751,22 @@ function onBagHit() {
     updateScore();
     playPunchSound();
 
-    // Bag animation: Tilt back
+    // Check if we're hitting the cell target
+    if (targetType === 'cell' && cellTarget && cellTarget.visible) {
+        // Create particle explosion for cell target
+        const hitPosition = cellTarget.position.clone();
+
+        // Calculate punch direction (from camera towards target)
+        const punchDirection = new THREE.Vector3();
+        punchDirection.subVectors(cellTarget.position, camera.position).normalize();
+
+        // Trigger explosion
+        createCellExplosion(hitPosition, punchDirection);
+
+        return; // Skip normal animation for cell target
+    }
+
+    // Bag animation: Tilt back (for rabbit and photo targets)
     if (punchingBag) {
         punchingBag.rotation.x = -Math.PI / 8;
         punchingBag.userData.velocity = 0.2;
@@ -594,6 +830,7 @@ function onBagHit() {
         }
     }
 }
+
 
 // (Legacy/Deprecated functions)
 function handleAiming() { }
@@ -665,7 +902,129 @@ function setupEventListeners() {
     if (resetBtn) {
         resetBtn.addEventListener('click', resetToDefaultTarget);
     }
+
+    // Target Type Selectors
+    const rabbitBtn = document.getElementById('rabbit-target-btn');
+    const cellBtn = document.getElementById('cell-target-btn');
+    const photoBtn = document.getElementById('photo-target-btn');
+    const photoUploadSection = document.getElementById('photo-upload-section');
+
+    if (rabbitBtn) {
+        rabbitBtn.addEventListener('click', () => {
+            switchToRabbitTarget();
+            updateActiveButton('rabbit');
+            if (photoUploadSection) photoUploadSection.style.display = 'none';
+        });
+    }
+
+    if (cellBtn) {
+        cellBtn.addEventListener('click', () => {
+            switchToCellTarget();
+            updateActiveButton('cell');
+            if (photoUploadSection) photoUploadSection.style.display = 'none';
+        });
+    }
+
+    if (photoBtn) {
+        photoBtn.addEventListener('click', () => {
+            updateActiveButton('photo');
+            if (photoUploadSection) photoUploadSection.style.display = 'block';
+        });
+    }
 }
+
+// Update Active Target Button
+function updateActiveButton(type) {
+    const rabbitBtn = document.getElementById('rabbit-target-btn');
+    const cellBtn = document.getElementById('cell-target-btn');
+    const photoBtn = document.getElementById('photo-target-btn');
+
+    // Remove active class from all
+    if (rabbitBtn) rabbitBtn.classList.remove('active');
+    if (cellBtn) cellBtn.classList.remove('active');
+    if (photoBtn) photoBtn.classList.remove('active');
+
+    // Add active class to selected
+    if (type === 'rabbit' && rabbitBtn) rabbitBtn.classList.add('active');
+    if (type === 'cell' && cellBtn) cellBtn.classList.add('active');
+    if (type === 'photo' && photoBtn) photoBtn.classList.add('active');
+}
+
+// Switch to Rabbit Target
+function switchToRabbitTarget() {
+    targetType = 'rabbit';
+    usingCustomTarget = false;
+    usingCellTarget = false;
+
+    // Hide cell and custom targets
+    if (cellTarget) cellTarget.visible = false;
+    if (customTargetMesh) {
+        scene.remove(customTargetMesh);
+        if (customTargetMesh.geometry) customTargetMesh.geometry.dispose();
+        if (customTargetMesh.material) {
+            if (Array.isArray(customTargetMesh.material)) {
+                customTargetMesh.material.forEach(m => m.dispose());
+            } else {
+                customTargetMesh.material.dispose();
+            }
+        }
+        customTargetMesh = null;
+    }
+
+    // Show rabbit (find it in scene)
+    scene.traverse((object) => {
+        if (object.isGroup || object.isMesh) {
+            // Check if this looks like a loaded GLTF model
+            if (object.children.length > 0 && object.children[0].isMesh && !object.userData.isCustomTarget) {
+                object.visible = true;
+                punchingBag = object;
+                targets = [object];
+            }
+        }
+    });
+
+    console.log('🐰 Switched to Rabbit target');
+}
+
+// Switch to Cell Target
+function switchToCellTarget() {
+    targetType = 'cell';
+    usingCustomTarget = false;
+    usingCellTarget = true;
+
+    // Hide rabbit and custom targets
+    scene.traverse((object) => {
+        if (object.isGroup || object.isMesh) {
+            if ((object.children.length > 0 && object.children[0].isMesh && !object.userData.isCustomTarget) || object.userData.isCustomTarget) {
+                object.visible = false;
+            }
+        }
+    });
+
+    // Remove custom target if exists
+    if (customTargetMesh) {
+        scene.remove(customTargetMesh);
+        if (customTargetMesh.geometry) customTargetMesh.geometry.dispose();
+        if (customTargetMesh.material) {
+            if (Array.isArray(customTargetMesh.material)) {
+                customTargetMesh.material.forEach(m => m.dispose());
+            } else {
+                customTargetMesh.material.dispose();
+            }
+        }
+        customTargetMesh = null;
+    }
+
+    // Show cell target
+    if (cellTarget) {
+        cellTarget.visible = true;
+        punchingBag = cellTarget;
+        targets = [cellTarget];
+    }
+
+    console.log('🦠 Switched to Cell target');
+}
+
 
 // Toggle Game Play State
 function toggleGame() {
@@ -819,12 +1178,18 @@ function createCustomPhotoTarget(imageUrl) {
                 punchingBag.visible = false;
             }
 
+            // Hide cell target
+            if (cellTarget) {
+                cellTarget.visible = false;
+            }
+
             // Add to scene
             scene.add(targetGroup);
             customTargetMesh = targetGroup;
             punchingBag = targetGroup; // Make this the active target
             targets = [targetGroup];
             usingCustomTarget = true;
+            targetType = 'photo'; // Set target type
 
             console.log('✅ Custom photo target created!');
         },
@@ -877,13 +1242,26 @@ function resetToDefaultTarget() {
 
 
 // Animation Loop
+let lastTime = performance.now();
+
 function animate() {
     requestAnimationFrame(animate);
+
+    // Calculate delta time for physics
+    const currentTime = performance.now();
+    const deltaTime = Math.min((currentTime - lastTime) / 1000, 0.1); // Cap at 100ms to avoid huge jumps
+    lastTime = currentTime;
 
     // Update OrbitControls for smooth damping
     if (controls) {
         controls.update();
     }
+
+    // Update particle cloud floating animation
+    updateCellCloud(currentTime);
+
+    // Update particle system
+    updateParticles(deltaTime);
 
     // Bag physical simulation: Simple sway recovery
     if (punchingBag) {
@@ -893,6 +1271,35 @@ function animate() {
 
     renderer.render(scene, camera);
 }
+
+// Update Cell Cloud Floating Animation
+function updateCellCloud(time) {
+    // Only animate if cell target is visible and is a particle cloud
+    if (!cellTarget || !cellTarget.visible || !cellTarget.userData.isParticleCloud) return;
+
+    const cloudParticles = cellTarget.userData.cloudParticles;
+    if (!cloudParticles) return;
+
+    // Animate each particle with gentle floating motion
+    cloudParticles.forEach(particle => {
+        if (!particle.userData.originalPos) return;
+
+        const data = particle.userData;
+        const t = time * 0.001; // Convert to seconds
+
+        // Calculate floating offset using sine waves
+        const offsetX = Math.sin(t * data.floatSpeed + data.floatOffset) * data.floatRadius;
+        const offsetY = Math.cos(t * data.floatSpeed * 0.7 + data.floatOffset) * data.floatRadius;
+        const offsetZ = Math.sin(t * data.floatSpeed * 0.5 + data.floatOffset + 1.5) * data.floatRadius;
+
+        // Apply the floating offset to original position
+        particle.position.x = data.originalPos.x + offsetX;
+        particle.position.y = data.originalPos.y + offsetY;
+        particle.position.z = data.originalPos.z + offsetZ;
+    });
+}
+
+
 
 // Initialize the game
 init();

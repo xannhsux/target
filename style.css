@@ -6,7 +6,8 @@
 
 body {
     font-family: 'Arial', sans-serif;
-    background: #000000; /* Pure black background */
+    background: #000000;
+    /* Pure black background */
     overflow: hidden;
     color: white;
 }
@@ -40,7 +41,8 @@ body {
     z-index: 10;
     transform: scaleX(-1);
     background: rgba(0, 0, 0, 0.5);
-    opacity: 0.3; /* 降低视频透明度，让调试画布更清晰 */
+    opacity: 0.3;
+    /* 降低视频透明度，让调试画布更清晰 */
 }
 
 #debug-canvas {
@@ -89,7 +91,8 @@ body {
     margin: 10px 0;
 }
 
-#accuracy, #shots {
+#accuracy,
+#shots {
     font-size: 16px;
     margin: 5px 0;
     color: #e0e0e0;
@@ -152,9 +155,12 @@ body {
 }
 
 @keyframes pulse {
-    0%, 100% {
+
+    0%,
+    100% {
         opacity: 1;
     }
+
     50% {
         opacity: 0.5;
     }
@@ -166,12 +172,70 @@ body {
 }
 
 @keyframes flash {
-    0%, 100% {
+
+    0%,
+    100% {
         opacity: 1;
     }
+
     50% {
         opacity: 0.3;
     }
+}
+
+/* Target Selector Section */
+#target-selector {
+    position: absolute;
+    top: 360px;
+    right: 20px;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 20px;
+    border-radius: 15px;
+    min-width: 200px;
+    backdrop-filter: blur(10px);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    pointer-events: all;
+}
+
+#target-selector h3 {
+    font-size: 18px;
+    margin-bottom: 15px;
+    color: #60a5fa;
+}
+
+.target-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.target-btn {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    padding: 12px 16px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+    text-align: center;
+    transition: all 0.3s ease;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.target-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: translateX(-3px);
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+.target-btn.active {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-color: #667eea;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+.target-btn:active {
+    transform: translateX(0);
 }
 
 /* Photo Upload Section */
