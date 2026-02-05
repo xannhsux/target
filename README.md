@@ -47,7 +47,15 @@ An immersive, gesture-controlled 3D boxing game built with **Three.js** and **Me
 ## 📋 Requirements
 
 - **Browser**: Latest version of Chrome, Edge, or Firefox.
-- **Hardware**: A standard webcam and a well-lit environment.
+- **Hardware**: 
+  - Desktop/Laptop: A standard webcam and a well-lit environment.
+  - Mobile: Works on smartphones and tablets with front camera (iOS Safari, Chrome for Android).
+- **Device Support**:
+  - ✅ Desktop (Windows, Mac, Linux)
+  - ✅ Mobile Portrait mode (recommended for phone users)
+  - ✅ Mobile Landscape mode
+  - ✅ Tablet (iPad, Android tablets)
+  - Automatically adapts to screen size and orientation!
 
 ## 💻 Development Setup
 

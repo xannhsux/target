@@ -1,0 +1,38 @@
+╔══════════════════════════════════════════════════════════╗
+║          📱 MOBILE ACCESS - QUICK REFERENCE              ║
+╠══════════════════════════════════════════════════════════╣
+║                                                          ║
+║  🌐 Your Computer's IP Address: 192.168.1.66            ║
+║                                                          ║
+║  📱 On Your Phone (Same WiFi):                          ║
+║     Open browser and go to:                             ║
+║                                                          ║
+║     🔗 http://192.168.1.66:8000                         ║
+║                                                          ║
+╠══════════════════════════════════════════════════════════╣
+║  ✅ SUPPORTED DEVICES:                                   ║
+║     • iPhone (Safari)                                   ║
+║     • Android Phone (Chrome)                            ║
+║     • iPad / Android Tablets                            ║
+║     • Desktop / Laptop                                  ║
+║                                                          ║
+║  📐 AUTO-ADAPTS TO:                                      ║
+║     • Portrait Mode (竖屏) ✓                            ║
+║     • Landscape Mode (横屏) ✓                           ║
+║     • Any Screen Size ✓                                 ║
+║                                                          ║
+╠══════════════════════════════════════════════════════════╣
+║  💡 TIPS:                                                ║
+║     1. Make sure phone is on the same WiFi              ║
+║     2. Allow camera access when prompted                ║
+║     3. Use Chrome/Safari for best results               ║
+║     4. Portrait mode recommended for phones             ║
+║                                                          ║
+╚══════════════════════════════════════════════════════════╝
+
+🎮 The game will automatically adjust to your device's:
+   • Screen size
+   • Orientation (vertical/horizontal)
+   • Touch vs. mouse input
+
+🔄 Just rotate your device and the layout updates instantly!

@@ -336,3 +336,334 @@ body {
     color: #4ade80;
     font-weight: bold;
 }
+
+/* ===== RESPONSIVE DESIGN FOR MOBILE DEVICES ===== */
+
+/* Tablet and smaller screens */
+@media screen and (max-width: 768px) {
+
+    #video,
+    #debug-canvas {
+        width: 200px;
+        height: 150px;
+        top: 10px;
+        right: 10px;
+    }
+
+    #score-board {
+        top: 10px;
+        left: 10px;
+        padding: 15px;
+        min-width: 150px;
+    }
+
+    #score-board h2 {
+        font-size: 18px;
+    }
+
+    #score {
+        font-size: 36px;
+    }
+
+    #accuracy,
+    #shots {
+        font-size: 14px;
+    }
+
+    #instructions {
+        bottom: 10px;
+        left: 10px;
+        padding: 15px;
+        max-width: 250px;
+    }
+
+    #instructions h3 {
+        font-size: 16px;
+    }
+
+    #instructions p {
+        font-size: 12px;
+    }
+
+    #status {
+        top: 170px;
+        right: 10px;
+        padding: 12px 15px;
+        min-width: 160px;
+    }
+
+    #target-selector {
+        top: 240px;
+        right: 10px;
+        padding: 15px;
+        min-width: 160px;
+    }
+
+    #photo-upload-section {
+        bottom: 10px;
+        right: 10px;
+        padding: 15px;
+        max-width: 240px;
+    }
+}
+
+/* Mobile portrait mode - Stack UI vertically */
+@media screen and (max-width: 480px) and (orientation: portrait) {
+
+    #video,
+    #debug-canvas {
+        width: 160px;
+        height: 120px;
+        top: 10px;
+        right: 10px;
+    }
+
+    #score-board {
+        top: 10px;
+        left: 10px;
+        padding: 12px;
+        min-width: 130px;
+    }
+
+    #score-board h2 {
+        font-size: 16px;
+        margin-bottom: 5px;
+    }
+
+    #score {
+        font-size: 28px;
+        margin: 5px 0;
+    }
+
+    #accuracy,
+    #shots {
+        font-size: 12px;
+    }
+
+    #instructions {
+        bottom: 10px;
+        /* Back to bottom since selector is now minimal */
+        left: 10px;
+        padding: 12px;
+        max-width: calc(100vw - 20px);
+    }
+
+    #instructions h3 {
+        font-size: 14px;
+        margin-bottom: 8px;
+    }
+
+    #instructions p {
+        font-size: 11px;
+        margin: 5px 0;
+    }
+
+    #status {
+        top: 140px;
+        right: 10px;
+        padding: 10px 12px;
+        min-width: 140px;
+    }
+
+    #hand-status {
+        font-size: 14px;
+        margin-bottom: 8px;
+    }
+
+    #aim-status {
+        font-size: 12px;
+    }
+
+    /* Remove box styling - just buttons at bottom */
+    #target-selector {
+        position: fixed;
+        /* Fixed to viewport, not relative to parent */
+        bottom: 5px;
+        /* Very close to bottom edge */
+        left: 50%;
+        transform: translateX(-50%);
+        /* Center horizontally */
+        right: auto;
+        top: auto;
+        /* Override any top positioning */
+        padding: 0;
+        /* No padding */
+        min-width: auto;
+        max-width: calc(100vw - 20px);
+        background: none;
+        /* No background */
+        backdrop-filter: none;
+        /* No blur */
+        border: none;
+        /* No blur */
+        border: none;
+        /* No border */
+    }
+
+    /* Hide the title */
+    #target-selector h3 {
+        display: none;
+    }
+
+    /* Horizontal button layout for mobile */
+    .target-buttons {
+        flex-direction: row !important;
+        gap: 8px;
+        justify-content: center;
+    }
+
+    .target-btn {
+        padding: 10px 14px;
+        font-size: 12px;
+        flex: 0 1 auto;
+        white-space: nowrap;
+    }
+
+    #photo-upload-section {
+        bottom: 10px;
+        right: 10px;
+        padding: 12px;
+        max-width: 200px;
+    }
+
+    #photo-upload-section h3 {
+        font-size: 14px;
+    }
+
+    #photo-upload-section p {
+        font-size: 11px;
+    }
+
+    .upload-btn,
+    .reset-btn {
+        padding: 10px 15px;
+        font-size: 12px;
+    }
+}
+
+/* Landscape mode on mobile - adjust layout */
+@media screen and (max-width: 768px) and (orientation: landscape) {
+
+    #video,
+    #debug-canvas {
+        width: 180px;
+        height: 135px;
+        top: 10px;
+        right: 10px;
+    }
+
+    #score-board {
+        top: 10px;
+        left: 10px;
+        padding: 10px 15px;
+    }
+
+    #score-board h2 {
+        font-size: 16px;
+        margin-bottom: 5px;
+    }
+
+    #score {
+        font-size: 32px;
+        margin: 5px 0;
+    }
+
+    #instructions {
+        bottom: 10px;
+        left: 10px;
+        padding: 10px 15px;
+        max-width: 220px;
+    }
+
+    #instructions h3 {
+        font-size: 14px;
+        margin-bottom: 8px;
+    }
+
+    #instructions p {
+        font-size: 11px;
+        margin: 5px 0;
+    }
+
+    #status {
+        top: 150px;
+        right: 10px;
+    }
+
+    #target-selector {
+        top: 210px;
+        right: 10px;
+    }
+}
+
+/* Very small screens */
+@media screen and (max-width: 360px) {
+
+    #video,
+    #debug-canvas {
+        width: 140px;
+        height: 105px;
+    }
+
+    #score-board {
+        min-width: 110px;
+        padding: 10px;
+    }
+
+    #score-board h2 {
+        font-size: 14px;
+    }
+
+    #score {
+        font-size: 24px;
+    }
+
+    #accuracy,
+    #shots {
+        font-size: 11px;
+    }
+
+    #target-selector {
+        min-width: 120px;
+    }
+
+    .target-btn {
+        padding: 8px 10px;
+        font-size: 11px;
+    }
+}
+
+/* Touch-friendly improvements */
+@media (hover: none) and (pointer: coarse) {
+
+    .target-btn,
+    .upload-btn,
+    .reset-btn {
+        min-height: 44px;
+        /* iOS minimum touch target size */
+        padding: 12px 16px;
+    }
+
+    .target-btn:active {
+        background: rgba(255, 255, 255, 0.3);
+    }
+}
+
+/* Prevent text selection on touch devices */
+@media (hover: none) {
+    * {
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    input,
+    textarea {
+        -webkit-user-select: auto;
+        -moz-user-select: auto;
+        -ms-user-select: auto;
+        user-select: auto;
+    }
+}
