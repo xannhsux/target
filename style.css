@@ -122,6 +122,34 @@ body {
     line-height: 1.6;
 }
 
+.audio-test-btn {
+    margin-top: 15px;
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    padding: 12px 20px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: bold;
+    text-align: center;
+    transition: all 0.3s ease;
+    border: none;
+    box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+    pointer-events: all;
+    width: 100%;
+}
+
+.audio-test-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(16, 185, 129, 0.6);
+}
+
+.audio-test-btn:active {
+    transform: translateY(0);
+    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+}
+
+
 #status {
     position: absolute;
     top: 280px;

@@ -486,13 +486,13 @@ async function playPunchSound() {
         initAudio();
     }
 
-    // Ensure audio context is running (critical for mobile)
-    if (audioCtx.state === 'suspended') {
+    // CRITICAL: Aggressively resume audio context on EVERY sound play attempt (for mobile)
+    if (audioCtx.state !== 'running') {
         try {
             await audioCtx.resume();
-            console.log('🔊 Audio resumed for punch sound');
+            console.log('🔊 Audio context resumed for sound, state:', audioCtx.state);
         } catch (err) {
-            console.error('❌ Failed to resume audio:', err);
+            console.error('❌ Failed to resume audio for sound:', err);
             return; // Can't play sound if context won't resume
         }
     }
@@ -993,6 +993,40 @@ function setupEventListeners() {
             if (photoUploadSection) photoUploadSection.style.display = 'block';
         });
     }
+
+    // Audio Test Button - CRITICAL for iOS/iPad audio unlock
+    const audioTestBtn = document.getElementById('audio-test-btn');
+    if (audioTestBtn) {
+        audioTestBtn.addEventListener('click', async () => {
+            console.log('🔊 Audio test button clicked');
+
+            // Initialize audio context
+            initAudio();
+
+            // Force resume
+            if (audioCtx && audioCtx.state !== 'running') {
+                try {
+                    await audioCtx.resume();
+                    console.log('🔊 Audio context state after resume:', audioCtx.state);
+                } catch (err) {
+                    console.error('❌ Failed to resume audio:', err);
+                }
+            }
+
+            // Play a test sound
+            await playPunchSound();
+
+            // Give user feedback
+            const originalText = audioTestBtn.textContent;
+            audioTestBtn.textContent = audioCtx && audioCtx.state === 'running'
+                ? '✅ Audio Ready!'
+                : '❌ Audio Failed';
+
+            setTimeout(() => {
+                audioTestBtn.textContent = originalText;
+            }, 1500);
+        });
+    }
 }
 
 // Update Active Target Button
@@ -1116,10 +1150,23 @@ function switchToCellTarget() {
 
 
 // Toggle Game Play State
-function toggleGame() {
+async function toggleGame() {
     gameState.isPlaying = !gameState.isPlaying;
 
     if (gameState.isPlaying) {
+        // CRITICAL: Initialize and resume audio IMMEDIATELY when game starts
+        initAudio();
+
+        // Force resume audio context for mobile (belt and suspenders)
+        if (audioCtx && audioCtx.state === 'suspended') {
+            try {
+                await audioCtx.resume();
+                console.log('🔊 Audio unlocked on game start, state:', audioCtx.state);
+            } catch (err) {
+                console.error('❌ Failed to unlock audio:', err);
+            }
+        }
+
         if (gameState.handDetected) {
             updateHandStatus('Game Active...');
         } else {
