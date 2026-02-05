@@ -203,6 +203,9 @@ function createTargets() {
             // Successfully loaded the rabbit model
             const rabbitModel = gltf.scene;
 
+            // Mark this as the rabbit target (important for target switching)
+            rabbitModel.userData.isRabbitTarget = true;
+
             // Scale and position the rabbit
             rabbitModel.scale.set(2, 2, 2); // Adjust size as needed
             rabbitModel.position.set(0, 2, -5); // Position in front of camera
@@ -956,8 +959,38 @@ function switchToRabbitTarget() {
     usingCustomTarget = false;
     usingCellTarget = false;
 
-    // Hide cell and custom targets
-    if (cellTarget) cellTarget.visible = false;
+    // Clean up ALL cell-related particles
+    // 1. Clean up explosion particles (those in cellParticles array)
+    if (cellParticles && cellParticles.length > 0) {
+        cellParticles.forEach(particle => {
+            scene.remove(particle);
+            if (particle.geometry) particle.geometry.dispose();
+            if (particle.material) particle.material.dispose();
+        });
+        cellParticles = []; // Clear the array
+    }
+
+    // 2. Hide cell target and its particles
+    if (cellTarget) {
+        cellTarget.visible = false;
+        // Hide all particle clouds if they exist
+        if (cellTarget.userData.cloudParticles) {
+            cellTarget.userData.cloudParticles.forEach(particle => {
+                particle.visible = false;
+            });
+        }
+    }
+
+    // Clean up any explosion particles
+    scene.traverse((object) => {
+        if (object.userData && object.userData.isExplosionParticle) {
+            scene.remove(object);
+            if (object.geometry) object.geometry.dispose();
+            if (object.material) object.material.dispose();
+        }
+    });
+
+    // Remove custom target if exists
     if (customTargetMesh) {
         scene.remove(customTargetMesh);
         if (customTargetMesh.geometry) customTargetMesh.geometry.dispose();
@@ -971,19 +1004,16 @@ function switchToRabbitTarget() {
         customTargetMesh = null;
     }
 
-    // Show rabbit (find it in scene)
+    // Show rabbit (find it in scene) - only show objects explicitly marked as rabbit
     scene.traverse((object) => {
-        if (object.isGroup || object.isMesh) {
-            // Check if this looks like a loaded GLTF model
-            if (object.children.length > 0 && object.children[0].isMesh && !object.userData.isCustomTarget) {
-                object.visible = true;
-                punchingBag = object;
-                targets = [object];
-            }
+        if (object.userData && object.userData.isRabbitTarget) {
+            object.visible = true;
+            punchingBag = object;
+            targets = [object];
         }
     });
 
-    console.log('🐰 Switched to Rabbit target');
+    console.log('🐰 Switched to Rabbit target (cleaned up all cell particles)');
 }
 
 // Switch to Cell Target
