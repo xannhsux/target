@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>移动音频测试</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px 30px;
+            max-width: 500px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 28px;
+            text-align: center;
+        }
+
+        .subtitle {
+            color: #666;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .test-button {
+            width: 100%;
+            padding: 20px;
+            font-size: 24px;
+            font-weight: bold;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 15px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-bottom: 20px;
+        }
+
+        .test-button:active {
+            transform: scale(0.95);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .status {
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 15px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .log {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+
+        .log-entry {
+            margin-bottom: 5px;
+            padding: 3px;
+        }
+
+        .log-entry.success {
+            color: #28a745;
+        }
+
+        .log-entry.error {
+            color: #dc3545;
+        }
+
+        .log-entry.warn {
+            color: #ffc107;
+        }
+
+        .log-entry.info {
+            color: #17a2b8;
+        }
+
+        .instructions {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        .instructions ol {
+            margin-left: 20px;
+            margin-top: 10px;
+        }
+
+        .instructions li {
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🔊 移动音频测试</h1>
+        <p class="subtitle">测试Web Audio API在移动设备上的兼容性</p>
+
+        <button class="test-button" id="testBtn">🎵 点击测试声音</button>
+
+        <div class="status" id="status"></div>
+
+        <div class="log" id="log"></div>
+
+        <div class="instructions">
+            <strong>📱 测试说明：</strong>
+            <ol>
+                <li>确保设备没有静音</li>
+                <li>音量调到合适大小</li>
+                <li>点击上方按钮</li>
+                <li>应该听到"嘭"的打击声</li>
+                <li>查看下方日志了解详情</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        let audioCtx = null;
+        const logDiv = document.getElementById('log');
+        const statusDiv = document.getElementById('status');
+        const testBtn = document.getElementById('testBtn');
+
+        function addLog(message, type = 'info') {
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            const timestamp = new Date().toLocaleTimeString();
+            entry.textContent = `[${timestamp}] ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function showStatus(message, type) {
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+            statusDiv.style.display = 'block';
+        }
+
+        async function playTestSound() {
+            if (!audioCtx) {
+                addLog('AudioContext未初始化', 'error');
+                showStatus('❌ 音频系统未初始化', 'error');
+                return;
+            }
+
+            // 恢复AudioContext（如果需要）
+            if (audioCtx.state !== 'running') {
+                try {
+                    await audioCtx.resume();
+                    addLog(`AudioContext已恢复: ${audioCtx.state}`, 'success');
+                } catch (err) {
+                    addLog(`恢复失败: ${err.message}`, 'error');
+                    showStatus('❌ 无法恢复音频', 'error');
+                    return;
+                }
+            }
+
+            try {
+                addLog(`准备播放声音，状态: ${audioCtx.state}`, 'info');
+
+                // 创建打击声音
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.1);
+
+                gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.2);
+
+                // 高频冲击音
+                const osc2 = audioCtx.createOscillator();
+                const gain2 = audioCtx.createGain();
+                osc2.type = 'sine';
+                osc2.frequency.setValueAtTime(800, audioCtx.currentTime);
+                gain2.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                gain2.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.05);
+                osc2.connect(gain2);
+                gain2.connect(audioCtx.destination);
+                osc2.start();
+                osc2.stop(audioCtx.currentTime + 0.05);
+
+                addLog('✅ 声音播放成功！', 'success');
+                showStatus('✅ 声音播放成功！', 'success');
+
+                // 更新按钮
+                testBtn.textContent = '✅ 播放成功！';
+                setTimeout(() => {
+                    testBtn.textContent = '🎵 点击测试声音';
+                }, 1500);
+
+            } catch (err) {
+                addLog(`播放失败: ${err.message}`, 'error');
+                showStatus(`❌ 播放失败: ${err.message}`, 'error');
+            }
+        }
+
+        // 测试按钮点击事件
+        testBtn.addEventListener('click', function () {
+            addLog('=== 开始音频测试 ===', 'info');
+
+            // CRITICAL: 在同步事件处理器中创建AudioContext（iOS要求）
+            if (!audioCtx) {
+                try {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    addLog(`AudioContext已创建: ${audioCtx.state}`, 'success');
+                    addLog(`浏览器: ${navigator.userAgent}`, 'info');
+                    addLog(`平台: ${navigator.platform}`, 'info');
+                } catch (err) {
+                    addLog(`创建AudioContext失败: ${err.message}`, 'error');
+                    showStatus(`❌ 创建失败: ${err.message}`, 'error');
+                    return;
+                }
+            }
+
+            // 立即尝试恢复（同步）
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume().then(() => {
+                    addLog(`AudioContext已恢复: ${audioCtx.state}`, 'success');
+                    playTestSound();
+                }).catch(err => {
+                    addLog(`恢复失败: ${err.message}`, 'error');
+                    showStatus(`❌ 恢复失败: ${err.message}`, 'error');
+                });
+            } else {
+                addLog(`AudioContext状态: ${audioCtx.state}`, 'success');
+                playTestSound();
+            }
+        });
+
+        // 页面加载时的初始日志
+        addLog('页面已加载，等待用户交互...', 'info');
+        addLog('点击上方按钮开始测试', 'info');
+    </script>
+</body>
+
+</html>
