@@ -322,7 +322,19 @@ function createCellTarget() {
 function initAudio() {
     if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        console.log('🔊 AudioContext created, state:', audioCtx.state);
     }
+
+    // CRITICAL for mobile: Resume audio context if suspended
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume().then(() => {
+            console.log('🔊 AudioContext resumed successfully');
+        }).catch(err => {
+            console.error('❌ Failed to resume AudioContext:', err);
+        });
+    }
+
+    return audioCtx;
 }
 
 // Create Particle Explosion when Cell is Hit
@@ -468,37 +480,54 @@ function updateParticles(deltaTime) {
 
 
 // Play hit sound
-function playPunchSound() {
-    if (!audioCtx) initAudio();
-    if (audioCtx.state === 'suspended') audioCtx.resume();
+async function playPunchSound() {
+    // Initialize audio if not already done
+    if (!audioCtx) {
+        initAudio();
+    }
 
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
+    // Ensure audio context is running (critical for mobile)
+    if (audioCtx.state === 'suspended') {
+        try {
+            await audioCtx.resume();
+            console.log('🔊 Audio resumed for punch sound');
+        } catch (err) {
+            console.error('❌ Failed to resume audio:', err);
+            return; // Can't play sound if context won't resume
+        }
+    }
 
-    osc.type = 'square';
-    osc.frequency.setValueAtTime(150, audioCtx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.1);
+    try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
 
-    gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.1);
 
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
+        gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
 
-    osc.start();
-    osc.stop(audioCtx.currentTime + 0.2);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
 
-    // Secondary high-freq sound for impact
-    const osc2 = audioCtx.createOscillator();
-    const gain2 = audioCtx.createGain();
-    osc2.type = 'sine';
-    osc2.frequency.setValueAtTime(800, audioCtx.currentTime);
-    gain2.gain.setValueAtTime(0.2, audioCtx.currentTime);
-    gain2.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.05);
-    osc2.connect(gain2);
-    gain2.connect(audioCtx.destination);
-    osc2.start();
-    osc2.stop(audioCtx.currentTime + 0.05);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.2);
+
+        // Secondary high-freq sound for impact
+        const osc2 = audioCtx.createOscillator();
+        const gain2 = audioCtx.createGain();
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(800, audioCtx.currentTime);
+        gain2.gain.setValueAtTime(0.2, audioCtx.currentTime);
+        gain2.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.05);
+        osc2.connect(gain2);
+        gain2.connect(audioCtx.destination);
+        osc2.start();
+        osc2.stop(audioCtx.currentTime + 0.05);
+    } catch (err) {
+        console.error('❌ Error playing punch sound:', err);
+    }
 }
 
 // Setup Debug Canvas
@@ -892,9 +921,11 @@ function setupEventListeners() {
     if (canvas) {
         // Handle both click and touch events
         const handleCanvasInteraction = (e) => {
+            // CRITICAL: Initialize/resume audio on EVERY user interaction (required for iOS)
+            initAudio();
+
             // Only toggle game if not already playing (avoid accidental punches)
             if (!gameState.isPlaying) {
-                initAudio(); // Start audio context on user interaction
                 toggleGame();
             }
         };
@@ -903,6 +934,15 @@ function setupEventListeners() {
         canvas.addEventListener('touchstart', (e) => {
             e.preventDefault(); // Prevent double-firing on mobile
             handleCanvasInteraction(e);
+        }, { passive: false });
+
+        // Also add touchend listener to ensure audio is ready
+        canvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            // Resume audio context on touch end as well (belt and suspenders approach)
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
         }, { passive: false });
     }
 
