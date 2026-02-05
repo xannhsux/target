@@ -887,6 +887,25 @@ function setupEventListeners() {
         }
     });
 
+    // Click/Touch to start game (for mobile devices without space key)
+    const canvas = document.getElementById('game-canvas');
+    if (canvas) {
+        // Handle both click and touch events
+        const handleCanvasInteraction = (e) => {
+            // Only toggle game if not already playing (avoid accidental punches)
+            if (!gameState.isPlaying) {
+                initAudio(); // Start audio context on user interaction
+                toggleGame();
+            }
+        };
+
+        canvas.addEventListener('click', handleCanvasInteraction);
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault(); // Prevent double-firing on mobile
+            handleCanvasInteraction(e);
+        }, { passive: false });
+    }
+
     // Window Resize
     window.addEventListener('resize', () => {
         camera.aspect = window.innerWidth / window.innerHeight;
@@ -1072,7 +1091,7 @@ function toggleGame() {
         });
     } else {
         updateHandStatus('Game Paused');
-        updateAimStatus('Press SPACE to Resume');
+        updateAimStatus('Tap Screen or Press SPACE to Resume');
     }
 }
 
