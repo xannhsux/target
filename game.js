@@ -46,17 +46,31 @@ let customPhotoTexture = null;
 let customTargetMesh = null;
 let usingCustomTarget = false;
 
+// Crop functionality
+let cropImageData = null;
+let cropCanvas = null;
+let cropCtx = null;
+let cropBox = { startX: 0, startY: 0, width: 0, height: 0 };
+let isDragging = false;
+
 // Cancer Cell Particle Target
 let cellParticles = []; // Active particles from cell explosions
 let cellTarget = null; // The organic cell sphere
 let usingCellTarget = false;
-let targetType = 'rabbit'; // 'rabbit', 'photo', or 'cell'
+let targetType = 'rabbit'; // 'rabbit', 'photo', 'cell', or 'humanoid'
+
+// Face Detection and Humanoid Target
+let faceDetectionLoaded = false;
+let humanoidMesh = null; // The 3D humanoid model
+let usingHumanoidTarget = false;
+let extractedFaceTexture = null; // Cropped face texture
 
 // Initialization
 async function init() {
     setupThreeJS();
     setupDebugCanvas();
     await setupHandDetection();
+    await initFaceDetection(); // Initialize face detection models
     setupEventListeners();
     createTargets();
     createCellTarget(); // Create the cancer cell target
@@ -314,6 +328,399 @@ function createCellTarget() {
 
     scene.add(particleGroup);
     console.log('🦠 Particle cloud cell target created with', particleCount, 'particles!');
+}
+
+// Initialize Face Detection Models
+async function initFaceDetection() {
+    // Check if face-api is loaded
+    if (typeof faceapi === 'undefined') {
+        console.warn('⚠️ face-api.js not loaded yet, waiting...');
+        // Wait for face-api to load
+        let retries = 0;
+        while (typeof faceapi === 'undefined' && retries < 50) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            retries++;
+        }
+        if (typeof faceapi === 'undefined') {
+            console.error('❌ face-api.js failed to load');
+            return;
+        }
+    }
+
+    try {
+        console.log('🔍 Loading face detection models...');
+
+        // Load only the necessary models for face detection
+        // Using CDN path for models
+        const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+
+        await Promise.all([
+            faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+            faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL)
+        ]);
+
+        faceDetectionLoaded = true;
+        console.log('✅ Face detection models loaded successfully!');
+    } catch (error) {
+        console.error('❌ Error loading face detection models:', error);
+        console.log('💡 Face detection will be disabled, but you can still use photos normally');
+    }
+}
+
+// Create Humanoid Target Model
+function createHumanoidModel(faceTexture) {
+    // Create a group for the entire humanoid
+    const humanoidGroup = new THREE.Group();
+
+    // BODY - Simple rectangular torso
+    const bodyGeometry = new THREE.BoxGeometry(1.2, 2.0, 0.4);
+    const bodyMaterial = new THREE.MeshStandardMaterial({
+        color: 0x8B4513, // Brown color for body
+        roughness: 0.7,
+        metalness: 0.1
+    });
+    const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+    body.position.y = 1.0; // Center of torso
+    body.castShadow = true;
+    body.receiveShadow = true;
+    humanoidGroup.add(body);
+
+    // HEAD - Sphere with face texture
+    const headRadius = 0.5;
+    const headGeometry = new THREE.SphereGeometry(headRadius, 32, 32);
+
+    let headMaterial;
+    if (faceTexture) {
+        // Use the extracted face texture
+        faceTexture.minFilter = THREE.LinearFilter;
+        faceTexture.magFilter = THREE.LinearFilter;
+        faceTexture.wrapS = THREE.ClampToEdgeWrapping;
+        faceTexture.wrapT = THREE.ClampToEdgeWrapping;
+
+        headMaterial = new THREE.MeshStandardMaterial({
+            map: faceTexture,
+            roughness: 0.6,
+            metalness: 0.0
+        });
+    } else {
+        // Default skin color if no face texture
+        headMaterial = new THREE.MeshStandardMaterial({
+            color: 0xFFDBAC, // Skin tone
+            roughness: 0.6,
+            metalness: 0.0
+        });
+    }
+
+    const head = new THREE.Mesh(headGeometry, headMaterial);
+    head.position.y = 2.5; // On top of body
+    head.castShadow = true;
+    head.receiveShadow = true;
+    humanoidGroup.add(head);
+
+    // ARMS - Simple cylinders
+    const armGeometry = new THREE.CylinderGeometry(0.15, 0.15, 1.8, 16);
+    const armMaterial = new THREE.MeshStandardMaterial({
+        color: 0xFFDBAC, // Skin tone
+        roughness: 0.6
+    });
+
+    // Left arm
+    const leftArm = new THREE.Mesh(armGeometry, armMaterial);
+    leftArm.position.set(-0.8, 1.0, 0);
+    leftArm.rotation.z = 0.3; // Slight angle
+    leftArm.castShadow = true;
+    humanoidGroup.add(leftArm);
+
+    // Right arm
+    const rightArm = new THREE.Mesh(armGeometry, armMaterial);
+    rightArm.position.set(0.8, 1.0, 0);
+    rightArm.rotation.z = -0.3; // Slight angle
+    rightArm.castShadow = true;
+    humanoidGroup.add(rightArm);
+
+    // LEGS - Simple cylinders
+    const legGeometry = new THREE.CylinderGeometry(0.2, 0.18, 1.8, 16);
+    const legMaterial = new THREE.MeshStandardMaterial({
+        color: 0x2C3E50, // Dark pants color
+        roughness: 0.8
+    });
+
+    // Left leg
+    const leftLeg = new THREE.Mesh(legGeometry, legMaterial);
+    leftLeg.position.set(-0.35, -0.9, 0);
+    leftLeg.castShadow = true;
+    humanoidGroup.add(leftLeg);
+
+    // Right leg
+    const rightLeg = new THREE.Mesh(legGeometry, legMaterial);
+    rightLeg.position.set(0.35, -0.9, 0);
+    rightLeg.castShadow = true;
+    humanoidGroup.add(rightLeg);
+
+    // Position the entire humanoid in the scene
+    humanoidGroup.position.set(0, 1.5, -5);
+
+    // Mark as humanoid target
+    humanoidGroup.userData.isHumanoidTarget = true;
+
+    return humanoidGroup;
+}
+
+// Find Head Mesh in GLTF Model
+function findHeadMesh(model) {
+    let headMesh = null;
+
+    // Try common names first
+    const commonNames = ['Head', 'head', 'HEAD', 'Head_Geo', 'Face', 'face', 'Headset', 'headset'];
+    for (const name of commonNames) {
+        headMesh = model.getObjectByName(name);
+        if (headMesh && headMesh.isMesh) {
+            console.log(`✅ Found head mesh by name: "${name}"`);
+            return headMesh;
+        }
+    }
+
+    // Fallback: Find largest mesh in upper body area (y > 1.5)
+    let largestUpperMesh = null;
+    let maxVertices = 0;
+    model.traverse((node) => {
+        if (node.isMesh && node.position.y > 1.5) {
+            const vertexCount = node.geometry.attributes.position ? node.geometry.attributes.position.count : 0;
+            if (vertexCount > maxVertices) {
+                maxVertices = vertexCount;
+                largestUpperMesh = node;
+            }
+        }
+    });
+
+    if (largestUpperMesh) {
+        console.log(`✅ Found head mesh by position (upper body): "${largestUpperMesh.name}"`);
+        return largestUpperMesh;
+    }
+
+    // Last resort: Find first mesh
+    model.traverse((node) => {
+        if (node.isMesh && !headMesh) {
+            headMesh = node;
+        }
+    });
+
+    if (headMesh) {
+        console.warn(`⚠️ Using first available mesh as head: "${headMesh.name}"`);
+    } else {
+        console.error('❌ Could not find any mesh in model');
+    }
+
+    return headMesh;
+}
+
+// Create Simple Humanoid Model with Photo on Head
+function createSimpleHumanoidWithPhoto(faceTexture) {
+    console.log('👤 Creating simple humanoid model with photo on head...');
+
+    const humanoidGroup = new THREE.Group();
+
+    // Apply high-quality texture settings
+    faceTexture.minFilter = THREE.LinearFilter;
+    faceTexture.magFilter = THREE.LinearFilter;
+    faceTexture.wrapS = THREE.ClampToEdgeWrapping;
+    faceTexture.wrapT = THREE.ClampToEdgeWrapping;
+
+    // Maximize anisotropic filtering for sharpness
+    const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
+    if (maxAnisotropy > 1) {
+        faceTexture.anisotropy = maxAnisotropy;
+    }
+    faceTexture.needsUpdate = true;
+
+    // Body material (simple color, no texture)
+    const bodyMaterial = new THREE.MeshStandardMaterial({
+        color: 0xffdbac, // Skin tone
+        roughness: 0.8,
+        metalness: 0.1
+    });
+
+    // Head with PHOTO TEXTURE - use Box to avoid distortion (bigger head)
+    const headSize = 1.4;
+    const headGeometry = new THREE.BoxGeometry(headSize, headSize, headSize);
+    const headMaterial = new THREE.MeshStandardMaterial({
+        map: faceTexture,
+        roughness: 0.6,
+        metalness: 0.1
+    });
+    const head = new THREE.Mesh(headGeometry, headMaterial);
+    head.position.y = 2.6;
+    head.castShadow = true;
+    head.receiveShadow = true;
+    humanoidGroup.add(head);
+
+    // Torso (no texture, just color)
+    const torsoGeometry = new THREE.CapsuleGeometry(0.5, 1.2, 8, 16);
+    const torso = new THREE.Mesh(torsoGeometry, bodyMaterial);
+    torso.position.y = 1.2;
+    torso.castShadow = true;
+    torso.receiveShadow = true;
+    humanoidGroup.add(torso);
+
+    // Arms (no texture)
+    const armGeometry = new THREE.CapsuleGeometry(0.15, 0.9, 8, 16);
+
+    const leftArm = new THREE.Mesh(armGeometry, bodyMaterial);
+    leftArm.position.set(-0.7, 1.4, 0);
+    leftArm.rotation.z = Math.PI / 6;
+    leftArm.castShadow = true;
+    humanoidGroup.add(leftArm);
+
+    const rightArm = new THREE.Mesh(armGeometry, bodyMaterial);
+    rightArm.position.set(0.7, 1.4, 0);
+    rightArm.rotation.z = -Math.PI / 6;
+    rightArm.castShadow = true;
+    humanoidGroup.add(rightArm);
+
+    // Legs (no texture)
+    const legGeometry = new THREE.CapsuleGeometry(0.18, 1.0, 8, 16);
+
+    const leftLeg = new THREE.Mesh(legGeometry, bodyMaterial);
+    leftLeg.position.set(-0.25, 0.1, 0);
+    leftLeg.castShadow = true;
+    humanoidGroup.add(leftLeg);
+
+    const rightLeg = new THREE.Mesh(legGeometry, bodyMaterial);
+    rightLeg.position.set(0.25, 0.1, 0);
+    rightLeg.castShadow = true;
+    humanoidGroup.add(rightLeg);
+
+    // Position the whole group
+    humanoidGroup.position.set(0, 1.0, -5);
+    humanoidGroup.scale.set(1.2, 1.2, 1.2);
+
+    // Mark as humanoid target
+    humanoidGroup.userData.isHumanoidTarget = true;
+
+    console.log('✅ Simple humanoid created - photo ONLY on head!');
+
+    return humanoidGroup;
+}
+
+// Create Humanoid GLTF Model with Face Texture
+function createHumanoidGLTFModel(faceTexture) {
+    // Use simple procedural model instead of GLTF
+    // This guarantees the photo only appears on the head
+    console.log('🔄 Creating humanoid with photo on head...');
+
+    const humanoidModel = createSimpleHumanoidWithPhoto(faceTexture);
+
+    // Hide other targets
+    scene.traverse((object) => {
+        if (object.userData && object.userData.isRabbitTarget) {
+            object.visible = false;
+        }
+    });
+
+    if (cellTarget) {
+        cellTarget.visible = false;
+    }
+
+    if (customTargetMesh) {
+        customTargetMesh.visible = false;
+    }
+
+    // Remove old humanoid if exists
+    if (humanoidMesh && humanoidMesh !== humanoidModel) {
+        scene.remove(humanoidMesh);
+        humanoidMesh.traverse((child) => {
+            if (child.geometry) child.geometry.dispose();
+            if (child.material) child.material.dispose();
+        });
+    }
+
+    // Add to scene
+    scene.add(humanoidModel);
+    punchingBag = humanoidModel;
+    humanoidMesh = humanoidModel;
+    targets = [humanoidModel];
+    usingCustomTarget = false;
+    usingHumanoidTarget = true;
+    targetType = 'humanoid';
+
+    console.log('✅ Humanoid model target ready!');
+    console.log('📍 Model position:', humanoidModel.position);
+    console.log('📏 Model scale:', humanoidModel.scale);
+}
+
+// Extract Face from Image using Face Detection
+async function extractFaceFromImage(imageUrl) {
+    if (!faceDetectionLoaded) {
+        console.warn('⚠️ Face detection not loaded, using full image');
+        return null;
+    }
+
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+
+        img.onload = async () => {
+            try {
+                console.log('🔍 Detecting face in image...');
+
+                // Detect face in the image
+                const detection = await faceapi
+                    .detectSingleFace(img, new faceapi.TinyFaceDetectorOptions())
+                    .withFaceLandmarks();
+
+                if (!detection) {
+                    console.warn('⚠️ No face detected in image, using full image');
+                    resolve(null);
+                    return;
+                }
+
+                console.log('✅ Face detected!');
+
+                // Get face bounding box
+                const box = detection.detection.box;
+
+                // Expand the bounding box to include more of the head
+                const expansion = 0.5; // Expand by 50% on each side
+                const expandedBox = {
+                    x: Math.max(0, box.x - box.width * expansion),
+                    y: Math.max(0, box.y - box.height * expansion),
+                    width: Math.min(img.width - box.x, box.width * (1 + 2 * expansion)),
+                    height: Math.min(img.height - box.y, box.height * (1 + 2 * expansion))
+                };
+
+                // Create a canvas to extract the face region
+                const canvas = document.createElement('canvas');
+                canvas.width = expandedBox.width;
+                canvas.height = expandedBox.height;
+                const ctx = canvas.getContext('2d');
+
+                // Draw the face region
+                ctx.drawImage(
+                    img,
+                    expandedBox.x, expandedBox.y, expandedBox.width, expandedBox.height,
+                    0, 0, expandedBox.width, expandedBox.height
+                );
+
+                // Convert canvas to texture
+                const faceTexture = new THREE.CanvasTexture(canvas);
+                faceTexture.needsUpdate = true;
+
+                console.log('✅ Face extracted and converted to texture!');
+                resolve(faceTexture);
+
+            } catch (error) {
+                console.error('❌ Error detecting face:', error);
+                resolve(null);
+            }
+        };
+
+        img.onerror = () => {
+            console.error('❌ Error loading image for face detection');
+            resolve(null);
+        };
+
+        img.src = imageUrl;
+    });
 }
 
 
@@ -803,13 +1210,31 @@ function onBagHit() {
         return; // Skip normal animation for cell target
     }
 
-    // Bag animation: Tilt back (for rabbit and photo targets)
+    // Bag animation: Tilt back (for rabbit, photo, and humanoid targets)
     if (punchingBag) {
         punchingBag.rotation.x = -Math.PI / 8;
         punchingBag.userData.velocity = 0.2;
 
-        // Different visual feedback for custom photo vs default model
-        if (usingCustomTarget) {
+        // Special effects for humanoid target
+        if (usingHumanoidTarget || targetType === 'humanoid') {
+            // For humanoid: Flash the body parts red
+            punchingBag.traverse((node) => {
+                if (node.isMesh && node.material) {
+                    // Store original color if not already stored
+                    if (!node.userData.originalColor) {
+                        node.userData.originalColor = node.material.color ? node.material.color.clone() : new THREE.Color(0xffffff);
+                    }
+
+                    // Flash red
+                    const originalColor = node.userData.originalColor.clone();
+                    node.material.color.setHex(0xff0000);
+
+                    setTimeout(() => {
+                        node.material.color.copy(originalColor);
+                    }, 200);
+                }
+            });
+        } else if (usingCustomTarget) {
             // For custom photo: Use scale pulse instead of color flash
             const originalScale = punchingBag.scale.clone();
 
@@ -988,6 +1413,18 @@ function setupEventListeners() {
 
     if (resetBtn) {
         resetBtn.addEventListener('click', resetToDefaultTarget);
+    }
+
+    // Crop confirmation buttons
+    const confirmCropBtn = document.getElementById('confirm-crop-btn');
+    const cancelCropBtn = document.getElementById('cancel-crop-btn');
+
+    if (confirmCropBtn) {
+        confirmCropBtn.addEventListener('click', confirmCrop);
+    }
+
+    if (cancelCropBtn) {
+        cancelCropBtn.addEventListener('click', cancelCrop);
     }
 
     // Target Type Selectors
@@ -1223,7 +1660,7 @@ async function toggleGame() {
 }
 
 // Handle Photo Upload
-function handlePhotoUpload(event) {
+async function handlePhotoUpload(event) {
     const file = event.target.files[0];
     if (!file) return;
 
@@ -1236,31 +1673,206 @@ function handlePhotoUpload(event) {
     // Create file reader
     const reader = new FileReader();
 
-    reader.onload = function (e) {
+    reader.onload = async function (e) {
         const imageUrl = e.target.result;
 
-        // Update preview - DISABLED (user doesn't want preview)
-        // const previewImg = document.getElementById('preview-img');
-        // const previewSection = document.getElementById('photo-preview');
-        const resetBtn = document.getElementById('reset-target-btn');
+        console.log('📸 Photo uploaded, showing crop interface...');
 
-        // Don't show preview
-        // if (previewImg && previewSection) {
-        //     previewImg.src = imageUrl;
-        //     previewSection.style.display = 'block';
-        // }
-
-        if (resetBtn) {
-            resetBtn.style.display = 'block';
-        }
-
-        // Create custom 3D target with the photo
-        createCustomPhotoTarget(imageUrl);
-
-        console.log('✅ Photo uploaded successfully!');
+        // Show crop interface
+        showCropInterface(imageUrl);
     };
 
     reader.readAsDataURL(file);
+}
+
+// Show Crop Interface
+function showCropInterface(imageUrl) {
+    const cropInterface = document.getElementById('crop-interface');
+    cropCanvas = document.getElementById('crop-canvas');
+    cropCtx = cropCanvas.getContext('2d');
+    const cropBoxEl = document.getElementById('crop-box');
+
+    if (!cropInterface || !cropCanvas || !cropBoxEl) return;
+
+    // Load image
+    const img = new Image();
+    img.onload = function() {
+        // Set canvas size (max 400px width)
+        const maxWidth = 400;
+        const scale = Math.min(1, maxWidth / img.width);
+        cropCanvas.width = img.width * scale;
+        cropCanvas.height = img.height * scale;
+
+        // Draw image
+        cropCtx.drawImage(img, 0, 0, cropCanvas.width, cropCanvas.height);
+
+        // Store image data
+        cropImageData = { img, imageUrl, scale };
+
+        // Show crop interface
+        cropInterface.style.display = 'block';
+
+        // Initialize crop box (default: center square)
+        const size = Math.min(cropCanvas.width, cropCanvas.height) * 0.6;
+        cropBox = {
+            startX: (cropCanvas.width - size) / 2,
+            startY: (cropCanvas.height - size) / 2,
+            width: size,
+            height: size
+        };
+        updateCropBox(cropBoxEl);
+
+        // Setup crop interaction
+        setupCropInteraction(cropCanvas, cropBoxEl);
+    };
+    img.src = imageUrl;
+}
+
+// Update Crop Box Display
+function updateCropBox(cropBoxEl) {
+    if (!cropBoxEl) return;
+    cropBoxEl.style.left = cropBox.startX + 'px';
+    cropBoxEl.style.top = cropBox.startY + 'px';
+    cropBoxEl.style.width = cropBox.width + 'px';
+    cropBoxEl.style.height = cropBox.height + 'px';
+    cropBoxEl.style.display = 'block';
+}
+
+// Setup Crop Interaction - Fixed size, movable oval
+function setupCropInteraction(canvas, cropBoxEl) {
+    let isDraggingBox = false;
+    let dragOffset = { x: 0, y: 0 };
+
+    // Make crop box oval/ellipse shaped
+    cropBoxEl.style.borderRadius = '50%';
+    cropBoxEl.style.cursor = 'move';
+
+    // Mousedown on crop box itself
+    cropBoxEl.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        isDraggingBox = true;
+
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        dragOffset = {
+            x: x - cropBox.startX,
+            y: y - cropBox.startY
+        };
+    });
+
+    // Mousemove on document (to track movement anywhere)
+    document.addEventListener('mousemove', (e) => {
+        if (!isDraggingBox) return;
+
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        // Move crop box (keep size fixed)
+        let newX = x - dragOffset.x;
+        let newY = y - dragOffset.y;
+
+        // Keep within canvas bounds
+        newX = Math.max(0, Math.min(newX, cropCanvas.width - cropBox.width));
+        newY = Math.max(0, Math.min(newY, cropCanvas.height - cropBox.height));
+
+        cropBox.startX = newX;
+        cropBox.startY = newY;
+
+        updateCropBox(cropBoxEl);
+    });
+
+    // Mouseup on document (to stop dragging anywhere)
+    document.addEventListener('mouseup', () => {
+        if (isDraggingBox) {
+            isDraggingBox = false;
+        }
+    });
+}
+
+// Confirm Crop
+function confirmCrop() {
+    if (!cropImageData || !cropCanvas) return;
+
+    console.log('✂️ Extracting cropped region...');
+
+    // Create a new canvas for the cropped image
+    const croppedCanvas = document.createElement('canvas');
+    const croppedCtx = croppedCanvas.getContext('2d');
+
+    // Account for scale
+    const scale = cropImageData.scale;
+    const actualX = cropBox.startX / scale;
+    const actualY = cropBox.startY / scale;
+    const actualSize = cropBox.width / scale;
+
+    croppedCanvas.width = actualSize;
+    croppedCanvas.height = actualSize;
+
+    // Draw cropped portion
+    croppedCtx.drawImage(
+        cropImageData.img,
+        actualX, actualY, actualSize, actualSize,
+        0, 0, actualSize, actualSize
+    );
+
+    // Convert to texture
+    const croppedTexture = new THREE.CanvasTexture(croppedCanvas);
+    croppedTexture.needsUpdate = true;
+
+    console.log('✅ Cropped image extracted, creating model...');
+
+    // Hide crop interface
+    const cropInterface = document.getElementById('crop-interface');
+    if (cropInterface) cropInterface.style.display = 'none';
+
+    // Show reset button
+    const resetBtn = document.getElementById('reset-target-btn');
+    if (resetBtn) resetBtn.style.display = 'block';
+
+    // Create humanoid with cropped face texture
+    createHumanoidTarget(croppedTexture);
+}
+
+// Cancel Crop
+function cancelCrop() {
+    const cropInterface = document.getElementById('crop-interface');
+    if (cropInterface) cropInterface.style.display = 'none';
+
+    console.log('❌ Crop cancelled');
+}
+
+// Create Humanoid Target with Face Texture
+function createHumanoidTarget(faceTexture) {
+    // Remove old targets
+    if (customTargetMesh) {
+        scene.remove(customTargetMesh);
+        if (customTargetMesh.geometry) customTargetMesh.geometry.dispose();
+        if (customTargetMesh.material) {
+            if (Array.isArray(customTargetMesh.material)) {
+                customTargetMesh.material.forEach(m => m.dispose());
+            } else {
+                customTargetMesh.material.dispose();
+            }
+        }
+    }
+
+    if (humanoidMesh) {
+        scene.remove(humanoidMesh);
+        humanoidMesh.traverse((child) => {
+            if (child.geometry) child.geometry.dispose();
+            if (child.material) child.material.dispose();
+        });
+    }
+
+    // Store face texture for later use
+    extractedFaceTexture = faceTexture;
+
+    // Load GLTF humanoid model with face texture
+    console.log('👤 Creating GLTF humanoid target with face...');
+    createHumanoidGLTFModel(faceTexture);
 }
 
 // Create Custom Photo Target

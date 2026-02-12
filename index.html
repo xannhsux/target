@@ -26,7 +26,6 @@
                 <p>👊 <strong>Clench Fist</strong>: Closen fingers to be recognized</p>
                 <p>🥊 <strong>Quick Punch</strong>: Move hand forward to hit</p>
                 <p>Tap Screen or Press SPACE to Start/Pause</p>
-                <button id="audio-test-btn" class="audio-test-btn">🔊 Test Sound</button>
             </div>
             <div id="target-selector">
 
@@ -46,6 +45,20 @@
                     </label>
                     <button id="reset-target-btn" class="reset-btn" style="display: none;">Use Default Rabbit</button>
                 </div>
+
+                <!-- Crop Interface -->
+                <div id="crop-interface" style="display: none; margin-top: 20px;">
+                    <h4>✂️ Crop the face area</h4>
+                    <div id="crop-container" style="position: relative; display: inline-block; max-width: 400px;">
+                        <canvas id="crop-canvas" style="border: 2px solid #fff; cursor: crosshair;"></canvas>
+                        <div id="crop-box" style="position: absolute; border: 2px dashed #00ff00; background: rgba(0,255,0,0.1); display: none;"></div>
+                    </div>
+                    <div style="margin-top: 10px;">
+                        <button id="confirm-crop-btn" class="upload-btn">✅ Confirm & Apply</button>
+                        <button id="cancel-crop-btn" class="reset-btn">❌ Cancel</button>
+                    </div>
+                </div>
+
                 <div id="photo-preview" style="display: none;">
                     <img id="preview-img" src="" alt="Preview">
                     <p id="preview-label">Current Target</p>
@@ -79,6 +92,9 @@
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/hand-pose-detection"></script>
+
+    <!-- Face Detection Library -->
+    <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
 
     <!-- Game logic as ES module -->
     <script type="module" src="game.js"></script>
